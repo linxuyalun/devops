@@ -1,6 +1,6 @@
 # Devops
 
-![license](https://img.shields.io/dub/l/vibe-d.svg?style=plastic)![](https://img.shields.io/badge/language-idon'tknow-orange.svg)
+![license](https://img.shields.io/dub/l/vibe-d.svg?style=plastic)
 
 Devops is the assignment of **Software Innovation and R&D Management**.
 
