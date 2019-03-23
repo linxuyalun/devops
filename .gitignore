@@ -1,0 +1,4 @@
+# drone sql
+database.sqlite
+# environment
+.env
