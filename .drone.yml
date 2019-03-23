@@ -1,0 +1,37 @@
+workspace:
+  base: /node
+  path: /drone/example
+
+clone:
+  git:
+    image: plugins/git
+    depath: 50
+    tags: true
+
+pipeline:
+  node1:
+    image: node:11.12.0
+    group: group1
+    commands:
+      - echo "node testing 1"
+
+  node2:
+    image: node:11.12.0
+    group: group1
+    commands:
+      - echo "node testing 2"
+
+  node3:
+    image: node:11.12.0
+    group: group2
+    commands:
+      - sleep 10
+      - echo "sleep 10"
+
+  node4:
+    image: node:11.12.0
+    group: group2
+    commands:
+      - sleep 5
+      - echo "sleep 5"
+  
