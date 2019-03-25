@@ -10,6 +10,19 @@ Devops is the assignment of **Software Innovation and R&D Management**.
 * 姚朋[@pengy14](https://github.com/pengy14)
 * 林许亚伦[@linxuyalun](https://github.com/linxuyalun)
 
+## Idea
+
+Our idea is to build a platform which provides the main function. It can trigger an event via email to inform the user of the discount of commodity that they want. The basic procedure is as followed:
+* register
+* search commodities in taobao or jingdong with key words
+* add commodities to listening list
+* start listening
+* send an email when get a discount
+
+### Advantages
+* no need to login jingdong or taobao
+* integration of multiple electronic business platforms
+
 ## Configure and run Drone server in single machine
 
 The process of configuring and running Drone server in single machine can be seen on this [page](https://docs.drone.io/installation/github/single-machine/).
