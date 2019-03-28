@@ -1,0 +1,6 @@
+[submodule "Argus_Backend"]
+	path = Argus_Backend
+	url = https://github.com/JamesCao2048/Argus_Backend
+[submodule "Argus-front"]
+	path = Argus-front
+	url = https://github.com/pengy14/Argus-front.git
