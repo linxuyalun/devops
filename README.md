@@ -213,3 +213,15 @@ kube-system   replicaset.apps/monitoring-influxdb-grafana-v4-78777c64c8   1     
 ```
 
 Make sure that all pods are in the "Running" state.
+
+See cluster information with `microk8s.kubectl cluster-info`:
+
+```
+Kubernetes master is running at https://127.0.0.1:16443
+Heapster is running at https://127.0.0.1:16443/api/v1/namespaces/kube-system/services/heapster/proxy
+KubeDNS is running at https://127.0.0.1:16443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+Grafana is running at https://127.0.0.1:16443/api/v1/namespaces/kube-system/services/monitoring-grafana/proxy
+InfluxDB is running at https://127.0.0.1:16443/api/v1/namespaces/kube-system/services/monitoring-influxdb:http/proxy
+```
+
+If you deploy microk8s on a remote machine, username and password are required when visit the machine.Right now this username/password are random strings created at MicroK8s install time. You should be able to add more uses in `/var/snap/microk8s/current/credentials/basic_auth.csv`. You can read more [here](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#static-password-file).
