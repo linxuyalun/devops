@@ -63,7 +63,7 @@ All sensitive information has been stored in `.env`.
 To start the drone server, run
 
 ```
-docker-compose -f docker-compose.yml up
+docker-compose -f $FILE_NAME up -d
 ```
 
 Ideally, when go to `www.your-drone-server.com`, Drone will first ask for authorization from GitHub, and then synchronous all repositories from the corresponding account:
