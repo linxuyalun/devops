@@ -1,8 +1,10 @@
-# Devops
+# Argus
 
-[![Build Status](http://47.112.23.163:8081/api/badges/linxuyalun/devops/status.svg)](http://47.112.23.163:8081/linxuyalun/devops)![license](https://img.shields.io/dub/l/vibe-d.svg?style=plastic)
+[![Build Status](http://47.112.23.163:8081/api/badges/linxuyalun/devops/status.svg)](http://47.112.23.163:8081/linxuyalun/devops)
+[![LICENSE](https://img.shields.io/badge/license-NPL%20(The%20996%20Prohibited%20License)-blue.svg)](https://github.com/linxuyalun/devops/master/LICENSE)
+<a href="https://996.icu"><img src="https://img.shields.io/badge/link-996.icu-red.svg" alt="996.icu"></a>
 
-Devops is the assignment of **Software Innovation and R&D Management**.
+Argus is the assignment of **Software Innovation and R&D Management**.
 
 ## Team Members
 
@@ -60,8 +62,8 @@ All sensitive information has been stored in `.env`.
 
 To start the drone server, run
 
-```shell
-docker-compose -f docker-compose.yml up
+```
+docker-compose -f $FILE_NAME up -d
 ```
 
 Ideally, when go to `www.your-drone-server.com`, Drone will first ask for authorization from GitHub, and then synchronous all repositories from the corresponding account:
