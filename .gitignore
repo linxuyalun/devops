@@ -2,3 +2,5 @@
 database.sqlite
 # environment
 .env
+
+.DS_Store
