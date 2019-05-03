@@ -218,7 +218,7 @@ InfluxDB is running at https://127.0.0.1:16443/api/v1/namespaces/kube-system/ser
 
 ## Kubernetes demo
 
-You can learn about `kubectl` document which was just rewrote in k8s 1.14 [here](https://kubectl.docs.kubernetes.io/).
+You can learn about `kubectl` document which was just rewritten in k8s 1.14 [here](https://kubectl.docs.kubernetes.io/).
 
 All files in the following demos can be found [here](../k8s-demo).
 
@@ -395,3 +395,110 @@ root@helloworld-deployment-586989ffdd-kvqs7:/etc/creds# cat username
 root
 ```
 
+### Demo 02 - Running Apllication Using the Secrets
+
+**Aim**: Set up an apllication(e.g. WordPress) using the secrets.
+
+In this demo, it does not involve stateful containers yet, that means that whenever you put data in this WordPress, it's not going to be persistent. 
+
+`kustomization.yaml`
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- deployment.yaml
+- service.yaml
+
+namespace: default
+
+secretGenerator:
+- name: wordpress-secrets
+  files:
+  - "secret/db-password"
+  type: Opaque
+```
+
+`deployment.yaml`
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress-deployment
+  labels:
+    app: wordpress
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wordpress
+  template:
+    metadata:
+      labels:
+        app: wordpress
+    spec:
+      containers:
+      - name: wordpress
+        image: wordpress:4-php7.0
+        ports:
+        - name: http-port
+          containerPort: 80
+        env:
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-secrets
+              key: db-password
+        - name: WORDPRESS_DB_HOST
+          value: 127.0.0.1
+      - name: mysql
+        image: mysql:5.7
+        ports:
+        - name: mysql-port
+          containerPort: 3306
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-secrets
+              key: db-password
+```
+
+We'd like to access the WordPress, thus we set up a Service and expose the port (e.g. 31000).
+
+`service.yaml`
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name:  wordpress-service
+spec:
+  selector:
+    app: wordpress
+  type: NodePort
+  ports:
+  - name: wordpress-service
+    port: 31000
+    nodePort: 31000
+    targetPort: http-port
+    protocol: TCP
+```
+
+Apply the above files:
+
+```bash
+kubectl apply -k .
+```
+
+And we set up the WordPress successfully!
+
+```
+> kubectl get pods
+NAME                                    READY   STATUS    RESTARTS   AGE
+wordpress-deployment-5d8449fcdb-7s48d   2/2     Running   0          15m
+```
+
+Then we can play with it - choose a language, register, write a post and so on. However, do remember these data is all not persistent because the containers we created are cattles.
