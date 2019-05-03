@@ -216,5 +216,182 @@ InfluxDB is running at https://127.0.0.1:16443/api/v1/namespaces/kube-system/ser
 1. If you deploy microk8s on a remote machine, username and password are required when visit the machine. Right now this username/password are random strings created at MicroK8s install time. You should be able to add more uses in `/var/snap/microk8s/current/credentials/basic_auth.csv`. You can read more [here](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#static-password-file).
 2. If your pod's status is not "RUNNING", for example, but "ImagePullBackOff". You can run `microk8s.kubectl describe pod <pod-id>` to find out what's happening. More information about [how to debug “ImagePullBackOff”?](https://stackoverflow.com/questions/34848422/how-to-debug-imagepullbackoff)
 
+## Kubernetes demo
 
+You can learn about `kubectl` document which was just rewrote in k8s 1.14 [here](https://kubectl.docs.kubernetes.io/).
+
+All files in the following demos can be found [here](../k8s-demo).
+
+### Demo 01 - Secrets
+
+**Aim**: Learn about how to mount secret file into containers.
+
+`customization.yaml`
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- deployment.yaml
+
+namespace: default
+
+secretGenerator:
+- name: db-secrets
+  files:
+  - "secret/username"
+  - "secret/password"
+  type: Opaque
+```
+
+`deployment.yaml`
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: helloworld-deployment
+  labels:
+    app: helloworld
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: helloworld
+  template:
+    metadata:
+      labels:
+        app: helloworld
+    spec:
+      containers:
+      - name: k8s-demo
+        image: wardviaene/k8s-demo
+        ports:
+        - name: nodejs-port
+          containerPort: 3000
+        volumeMounts:
+        - name: cred-volume
+          mountPath: /etc/creds
+          readOnly: true
+      volumes:
+      - name: cred-volume
+        secret:
+          secretName: db-secrets
+```
+
+Run Apply on directories containing `kustomization.yaml` files using `-k`
+
+```
+kubectl apply -k .
+```
+
+The following messages shows that you created the pods successfully
+
+```
+secret/db-secrets-k87mg5mgmk created
+deployment.apps/helloworld-deployment created
+```
+
+Get pods:
+
+```
+NAME                                     READY   STATUS    RESTARTS   AGE
+helloworld-deployment-586989ffdd-kvqs7   1/1     Running   0          22s
+helloworld-deployment-586989ffdd-l6kr9   1/1     Running   0          22s
+helloworld-deployment-586989ffdd-wcpwc   1/1     Running   0          22s
+```
+
+Then describe one pod:
+
+```bash
+kubectl describe pod helloworld-deployment-586989ffdd-kvqs7
+```
+
+```
+# Output
+Name:               helloworld-deployment-586989ffdd-kvqs7
+Namespace:          default
+Priority:           0
+PriorityClassName:  <none>
+Node:               alan/172.18.51.81
+Start Time:         Fri, 03 May 2019 11:00:11 +0800
+Labels:             app=helloworld
+                    pod-template-hash=586989ffdd
+Annotations:        <none>
+Status:             Running
+IP:                 10.1.1.30
+Controlled By:      ReplicaSet/helloworld-deployment-586989ffdd
+Containers:
+  k8s-demo:
+    Container ID:   containerd://beecf1fe98abbec7dd22ca733269e17099fca6b55a3bebf32e2b6d78c199b7d4
+    Image:          wardviaene/k8s-demo
+    Image ID:       docker.io/wardviaene/k8s-demo@sha256:2c050f462f5d0b3a6430e7869bcdfe6ac48a447a89da79a56d0ef61460c7ab9e
+    Port:           3000/TCP
+    Host Port:      0/TCP
+    State:          Running
+      Started:      Fri, 03 May 2019 11:00:18 +0800
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /etc/creds from cred-volume (ro)
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-b5hpj (ro)
+Conditions:
+  Type              Status
+  Initialized       True
+  Ready             True
+  ContainersReady   True
+  PodScheduled      True
+  Volumes:
+  cred-volume:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  db-secrets-k87mg5mgmk
+    Optional:    false
+  default-token-b5hpj:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  default-token-b5hpj
+    Optional:    false
+QoS Class:       BestEffort
+Node-Selectors:  <none>
+Tolerations:     node.kubernetes.io/not-ready:NoExecute for 300s
+                 node.kubernetes.io/unreachable:NoExecute for 300s
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  39s   default-scheduler  Successfully assigned default/helloworld-deployment-586989ffdd-kvqs7 to alan
+  Normal  Pulling    38s   kubelet, alan      Pulling image "wardviaene/k8s-demo"
+  Normal  Pulled     32s   kubelet, alan      Successfully pulled image "wardviaene/k8s-demo"
+  Normal  Created    32s   kubelet, alan      Created container k8s-demo
+  Normal  Started    32s   kubelet, alan      Started container k8s-demo
+```
+
+You can see that we successfully mount the secrets files into containers:
+
+```
+Mounts:
+  /etc/creds from cred-volume (ro)
+  /var/run/secrets/kubernetes.io/serviceaccount from default-token-b5hpj (ro)
+```
+
+One important thing is Kubernetes also uses the Secretes in the volumes to share the Kubernetes credentials:
+
+```
+/var/run/secrets/kubernetes.io/serviceaccount from default-token-b5hpj (ro)
+```
+
+This is a volume that is already mounted and is done by Kubernetes itself to share the secrets within the pod so the pod can access the API.
+
+So let's start a shell:
+
+```
+kubectl exec -it helloworld-deployment-586989ffdd-kvqs7 -- /bin/bash
+root@helloworld-deployment-586989ffdd-kvqs7:/app# cd ../etc/creds
+root@helloworld-deployment-586989ffdd-kvqs7:/etc/creds# ls
+password  username
+root@helloworld-deployment-586989ffdd-kvqs7:/etc/creds# cat password
+password
+root@helloworld-deployment-586989ffdd-kvqs7:/etc/creds# cat username
+root
+```
 
