@@ -502,3 +502,178 @@ wordpress-deployment-5d8449fcdb-7s48d   2/2     Running   0          15m
 ```
 
 Then we can play with it - choose a language, register, write a post and so on. However, do remember these data is all not persistent because the containers we created are cattles.
+
+### Demo 03 - Service Discovery
+
+**Aim**: Connect different services by service discovery
+
+`kustomization.yaml`
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- database-deployment.yaml
+- database-service.yaml
+- helloworld-deployment.yaml
+- helloworld-service.yaml
+
+namespace: default
+
+secretGenerator:
+- name: helloworld-secrets
+  files:
+  - "secret/username"
+  - "secret/password"
+  - "secret/rootPassword"
+  - "secret/database"
+  type: Opaque 
+```
+
+`database-deployment.yaml`
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: database-deployment
+  labels:
+    app: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: database
+  template:
+    metadata:
+      labels:
+        app: database
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:5.7
+        ports:
+        - name: mysql-port
+          containerPort: 3306
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: helloworld-secrets
+              key: rootPassword
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: helloworld-secrets
+              key: username
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: helloworld-secrets
+              key: password
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: helloworld-secrets
+              key: database
+```
+
+`database-service.yaml`
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: database-service # service name
+spec:
+  selector:
+    app: database
+  type: NodePort
+  ports:
+  - name: database-service
+    port: 3306
+    targetPort: mysql-port
+    protocol: TCP
+```
+
+`helloworld-deployment.yaml`
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: helloworld-deployment
+  labels:
+    app: helloworld
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: helloworld
+  template:
+    metadata:
+      labels:
+        app: helloworld
+    spec:
+      containers:
+      - name: k8s-demo
+        image: wardviaene/k8s-demo
+        command: ["node", "index-db.js"]
+        ports:
+        - name: nodejs-port
+          containerPort: 3000
+        env:
+        - name: MYSQL_HOST
+          value: database-service		# service descovery, thanks to DNS
+        - name: MYSQL_USER
+          value: root
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: helloworld-secrets
+              key: rootPassword
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: helloworld-secrets
+              key: database
+```
+
+`helloworld-service.yaml`
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name:  helloword-service
+spec:
+  selector:
+    app: helloword
+  type: NodePort
+  ports:
+  - name: helloword-service
+    port: 3000
+    nodePort: 31001
+    protocol: TCP
+```
+
+Apply the above files:
+
+```bash
+kubectl apply -k .
+```
+
+To make sure that the  application has connected to database, we can check the logs:
+
+```
+kubectl logs helloworld-deployment-6bfd7b6df6-sz2r4
+```
+
+Here's the output, indicating connecting to database successfully:
+
+```
+Example app listening at http://:::3000
+Connection to db established
+```
+
