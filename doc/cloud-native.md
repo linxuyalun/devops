@@ -677,3 +677,79 @@ Example app listening at http://:::3000
 Connection to db established
 ```
 
+### Demo 04 - Volumes
+
+**Aim**: Say hello to volumes
+
+We have already see `Volumes` in demo 1, now let's learn more about it.
+
+Kubernetes [supports several types of Volumes](https://kubernetes.io/docs/concepts/storage/volumes/#types-of-volumes). In our demo, we will use `hostPath` volume, which mounts a file or directory from the host node’s filesystem into your Pod.   
+
+To make the demo easy, we won't apply `kustomization.yaml` this time, one file is pretty enough.
+
+`volume.yaml`
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hello-volume
+spec:
+  containers:
+  - image: busybox
+    name: busybox1
+    command:
+    - /bin/sh
+    - -c
+    - "while true; do echo hello; sleep 10; done"
+    volumeMounts:
+    - name: hello-volume
+      mountPath: /test-pd
+  - image: busybox
+    name: busybox2
+    command:
+    - /bin/sh
+    - -c
+    - "while true; do echo hello; sleep 10; done"
+    volumeMounts:
+    - name: hello-volume
+      mountPath: /test-pd
+  volumes:
+  - name: hello-volume
+    hostPath:
+      path: /root/data	# need to be created in advance
+```
+
+```
+kubectl apply -f volume.yaml
+```
+
+Now we can see two pods have been set up:
+
+```
+NAME                        READY   STATUS    RESTARTS   AGE
+hello-volume                2/2     Running   0          17m
+```
+
+Note that `/root/data` on your local machine and `/test-pd` in your containers share the data:
+
+```bash
+> touch test
+> echo hello >> test
+> cat test
+	hello
+
+> kubectl exec -it hello-volume sh
+  Defaulting container name to busybox1.
+  Use 'kubectl describe pod/hello-volume -n default' to see all of the containers in this pod.
+  / # cd /test-pd/
+  /test-pd # more test
+  hello
+  /test-pd # echo goodbye >> test
+  /test-pd # exit
+
+> cat test
+	hello
+	goodbye
+```
+
