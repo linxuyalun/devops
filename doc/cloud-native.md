@@ -325,7 +325,6 @@ volumes:
   - name: cache
     host:
       path: /root/tmp/cache
-
 ```
 
 And here is the `Dockerfile` and `nginx.conf` in case of need:
@@ -368,6 +367,110 @@ If there is no error in your pipeline, you may see the following content:
 ![](img/5.png)
 
 And from now on, you build an automatic devops pipeline successfully!
+
+### Build the application in Docker (optional)
+
+If you wouldn't like to build the application in Drone, you can build it just in the Dockerfile.
+
+First, `Dockerfile` needs revision.
+
+```dockerfile
+# Stage 0, based on Node.js, to build and compile the frontend
+FROM node:11.13.0 as build-stage
+
+WORKDIR /app
+
+COPY package.json /app/
+
+RUN yarn install
+
+COPY ./ /app/
+
+RUN yarn build
+
+# Stage 1 based on Nginx, to have only the compiled app, ready for production with Nginx
+FROM nginx
+
+COPY --from=build-stage /app/build/ /usr/share/nginx/html
+
+COPY --from=build-stage /app/nginx.conf /etc/nginx/conf.d/default.conf
+```
+
+Modify our `scp ` in `.drone.yml`:
+
+```yaml
+kind: pipline
+name: molecule
+
+steps:
+- name: restore-cache
+  image: drillster/drone-volume-cache
+  volumes:
+  - name: cache
+    path: /cache
+  settings:
+    restore: true
+    mount:
+    - ./node_modules
+    - ./yarn-cache
+
+- name: install
+  image: node:11.13.0
+  commands:
+  - echo "Install dependencies 🧐🤪🤪"
+  - yarn --version
+  - yarn cache dir
+  - yarn config set cache-folder /drone/src/yarn-cache
+  - yarn install --pure-lockfile
+  - echo "Install successfully 🏰🏰🏰"
+
+- name: scp
+  image: appleboy/drone-scp
+  settings:
+    host: example.host.com
+    username: root
+    password:
+      from_secret: ssh_password
+    rm: true
+    target: /root/deploy/${DRONE_REPO}
+    source:
+    - src
+    - public
+    - package.json
+    - Dockerfile
+    - nginx.conf
+
+- name: ssh
+  image: appleboy/drone-ssh
+  settings:
+    host: example.host.com
+    username: root
+    password:
+      from_secret: ssh_password
+    script:
+      - cd /root/deploy/${DRONE_REPO}
+      - docker build -t xuylin/react-app .
+      - docker rm -f react-app-demo
+      - docker run -d --name react-app-demo -p 8088:80 xuylin/react-app
+
+- name: rebuild-cache
+  image: drillster/drone-volume-cache
+  volumes:
+  - name: cache
+    path: /cache
+  settings:
+    rebuild: true
+    mount:
+    - ./node_modules
+    - ./yarn-cache
+
+volumes:
+  - name: cache
+    host:
+      path: /root/tmp/cache
+```
+
+This is also an options of CI/CD, but it's really hard to say which one is better. For me, I prefer the former, which looks more general.
 
 # Scheduling & Orchestration
 
