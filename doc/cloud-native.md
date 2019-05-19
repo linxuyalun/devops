@@ -29,12 +29,13 @@ services:
       - DRONE_SERVER_PROTO=${DRONE_SERVER_PROTO}
       - DRONE_TLS_AUTOCERT=false
       - DRONE_RUNNER_CAPACITY=3
+      - DRONE_LOGS_PRETTY=true
+      - DRONE_LOGS_COLOR=true
+      - DRONE_USER_CREATE=username:linxuyalun,admin:true
       # GitHub Config
       - DRONE_GITHUB_SERVER=https://github.com
       - DRONE_GITHUB_CLIENT_ID=${DRONE_GITHUB_CLIENT_ID}
       - DRONE_GITHUB_CLIENT_SECRET=${DRONE_GITHUB_CLIENT_SECRET}
-      - DRONE_LOGS_PRETTY=true
-      - DRONE_LOGS_COLOR=true
 ```
 
 All sensitive information has been stored in `.env`.
@@ -71,6 +72,302 @@ steps:
 Ideally, every time a member push or pull request, GitHub will activate a web hook created by Drone server. Drone server then integrates the project base on the information from `.drone.yml` and show the activity feed on Drone UI:![](img/2.jpg)
 
 There are some details when configure and run Drone server. This [guide](https://discourse.drone.io/t/nothing-happens-when-i-push-code-no-builds-or-builds-stuck-in-pending/3424) troubleshoot the scenario where code is pushed and nothing happens in Drone. 
+
+Now just play with it! To make full use of Drone, plugins are needed. Go through the [market page](http://plugins.drone.io/) and choose whatever you want  🥴 
+
+## CI/CD in practice
+
+Assume that we gonna develop a front end application, the following content gives you a guide of how to devops.
+
+### Volume cache
+
+When we write an application, it's really common that we need to install vast dependencies to support our application, which costs several minutes. In order to reduce this part costs, we can apply [**volume cache**](http://plugins.drone.io/drillster/drone-volume-cache/) in our CI/CD.
+
+This plugin requires Volume configuration. This means your repository Trusted flag must be enabled. So we need to set our account as admin first — amend our `docker-compose.yml`:
+
+```yaml
+version: '2'
+
+services:
+  drone-server:
+    image: drone/drone:1.0.0
+    ports:
+      - 8081:80
+    volumes:
+      - ./:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+    environment:
+      - DRONE_SERVER_HOST=${DRONE_SERVER_HOST}
+      - DRONE_SERVER_PROTO=${DRONE_SERVER_PROTO}
+      - DRONE_TLS_AUTOCERT=false
+      - DRONE_RUNNER_CAPACITY=3
+      - DRONE_LOGS_PRETTY=true
+      - DRONE_LOGS_COLOR=true
+      # Add admin account
+      - DRONE_USER_CREATE=username:linxuyalun,admin:true
+      # GitHub Config
+      - DRONE_GITHUB_SERVER=https://github.com
+      - DRONE_GITHUB_CLIENT_ID=${DRONE_GITHUB_CLIENT_ID}
+      - DRONE_GITHUB_CLIENT_SECRET=${DRONE_GITHUB_CLIENT_SECRET}
+```
+
+See [full privilege](https://docs.drone.io/administration/user/admins/) of an admin here.
+
+Restart the container:
+
+```bash
+> docker-compose -f docker-compose.yml up -d
+Recreating devops_drone-server_1
+```
+
+Then we can go to a specific repo and setting it as trusted:
+
+![](img/4.png)
+
+Modify `.drone.yml`:
+
+```yaml
+kind: pipline
+name: molecule
+
+steps:
+- name: restore-cache
+  image: drillster/drone-volume-cache
+  volumes:
+  - name: cache
+    path: /cache
+  settings:
+    restore: true
+    mount:
+    - ./node_modules
+    - ./yarn-cache
+
+- name: install
+  image: node:11.13.0
+  commands:
+  - echo "Install dependencies 🧐🤪🤪"
+  - yarn --version
+  - yarn cache dir
+  - yarn config set cache-folder /drone/src/yarn-cache
+  - yarn install --pure-lockfile
+  - echo "Install successfully 🏰🏰🏰"
+
+- name: rebuild-cache
+  image: drillster/drone-volume-cache
+  volumes:
+  - name: cache
+    path: /cache
+  settings:
+    rebuild: true
+    mount:
+    - ./node_modules
+    - ./yarn-cache
+
+volumes:
+  - name: cache
+    host:
+      path: /root/tmp/cache
+```
+
+To learn the meaning of the above params, see [here](http://plugins.drone.io/drillster/drone-volume-cache/).
+
+### SCP
+
+The [SCP plugin](http://plugins.drone.io/appleboy/drone-scp/) copy files and artifacts to target host machine via SSH. 
+
+Because this is a front end application, there is no need to upload source files. We can first build the source code and then just upload these static files and other related configuration files.
+
+```yaml
+kind: pipline
+name: molecule
+
+steps:
+- name: restore-cache
+  image: drillster/drone-volume-cache
+  volumes:
+  - name: cache
+    path: /cache
+  settings:
+    restore: true
+    mount:
+    - ./node_modules
+    - ./yarn-cache
+
+- name: install
+  image: node:11.13.0
+  commands:
+  - echo "Install dependencies 🧐🤪🤪"
+  - yarn --version
+  - yarn cache dir
+  - yarn config set cache-folder /drone/src/yarn-cache
+  - yarn install --pure-lockfile
+  - echo "Install successfully 🏰🏰🏰"
+
+- name: build
+  image: node:11.13.0
+  commands:
+  - echo "Build the application ⛑⛑⛑"
+  - yarn cache dir
+  - yarn build
+  - echo "Build successfully 🗿🗿🗿"
+
+- name: scp
+  image: appleboy/drone-scp
+  settings:
+    host: example.host.com
+    username: root
+    password:
+      from_secret: ssh_password
+    rm: true
+    target: /root/deploy/${DRONE_REPO}
+    source:
+    - build
+    - Dockerfile
+    - nginx.conf
+
+- name: rebuild-cache
+  image: drillster/drone-volume-cache
+  volumes:
+  - name: cache
+    path: /cache
+  settings:
+    rebuild: true
+    mount:
+    - ./node_modules
+    - ./yarn-cache
+
+volumes:
+  - name: cache
+    host:
+      path: /root/tmp/cache
+```
+
+Here in our `scp` pipeline, we also send `Dockerfile` and `nginx.conf`. The remote server will use these two files to launch a container of our application.
+
+### SSH
+
+Use the [SSH plugin](http://plugins.drone.io/appleboy/drone-ssh/) to execute commands on a remote server. The process is very similar to **SCP**, and the contents are also easy to understand.
+
+```yaml
+kind: pipline
+name: molecule
+
+steps:
+- name: restore-cache
+  image: drillster/drone-volume-cache
+  volumes:
+  - name: cache
+    path: /cache
+  settings:
+    restore: true
+    mount:
+    - ./node_modules
+    - ./yarn-cache
+
+- name: install
+  image: node:11.13.0
+  commands:
+  - echo "Install dependencies 🧐🤪🤪"
+  - yarn --version
+  - yarn cache dir
+  - yarn config set cache-folder /drone/src/yarn-cache
+  - yarn install --pure-lockfile
+  - echo "Install successfully 🏰🏰🏰"
+
+- name: build
+  image: node:11.13.0
+  commands:
+  - echo "Build the application ⛑⛑⛑"
+  - yarn cache dir
+  - yarn build
+  - echo "Build successfully 🗿🗿🗿"
+
+- name: scp
+  image: appleboy/drone-scp
+  settings:
+    host: example.host.com
+    username: root
+    password:
+      from_secret: ssh_password
+    rm: true
+    target: /root/deploy/${DRONE_REPO}
+    source:
+    - build
+    - Dockerfile
+    - nginx.conf
+
+- name: ssh
+  image: appleboy/drone-ssh
+  settings:
+    host: example.host.com
+    username: root
+    password:
+      from_secret: ssh_password
+    script:
+      - cd /root/deploy/${DRONE_REPO}
+      - docker build -t xuylin/react-app .
+      - docker rm -f react-app-demo
+      - docker run -d --name react-app-demo -p 8088:80 xuylin/react-app
+
+- name: rebuild-cache
+  image: drillster/drone-volume-cache
+  volumes:
+  - name: cache
+    path: /cache
+  settings:
+    rebuild: true
+    mount:
+    - ./node_modules
+    - ./yarn-cache
+
+volumes:
+  - name: cache
+    host:
+      path: /root/tmp/cache
+
+```
+
+And here is the `Dockerfile` and `nginx.conf` in case of need:
+
+`Dockerfile`:
+
+```dockerfile
+FROM nginx
+
+COPY build/ /usr/share/nginx/html
+
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+```
+
+`nginx.conf`:
+
+```
+server {
+    listen 80;
+    server_name localhost;
+    location / {
+        root   /usr/share/nginx/html;
+        index  index.html;
+        try_files $uri /index.html;
+    }
+    location ~* /app.*\.(js|css|png|jpg)$
+    {
+        access_log off;
+        expires    365d;
+    }
+    location ~* /app.*\.(?:manifest|appcache|html?|xml|json)$
+    {
+        expires    -1;
+    }
+}
+```
+
+If there is no error in your pipeline, you may see the following content:
+
+![](img/5.png)
+
+And from now on, you build an automatic devops pipeline successfully!
 
 # Scheduling & Orchestration
 
