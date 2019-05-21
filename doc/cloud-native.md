@@ -219,12 +219,12 @@ steps:
     username: root
     password:
       from_secret: ssh_password
-    rm: true
     target: /root/deploy/${DRONE_REPO}
     source:
     - build
     - Dockerfile
     - nginx.conf
+    rm: true
 
 - name: rebuild-cache
   image: drillster/drone-volume-cache
