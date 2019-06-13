@@ -538,7 +538,7 @@ Microk8s is a single package of k8s that installs on Linux. It’s not elastic, 
 
 Follow this [guide](https://tutorials.ubuntu.com/tutorial/install-a-local-kubernetes-with-microk8s#0) to install microk8s.
 
-A proxy is needed, see [how to deploy behind a proxy](https://github.com/ubuntu/microk8s#deploy-behind-a-proxy).
+A proxy is needed, see [how to deploy behind a proxy](https://microk8s.io/docs/#deploy-behind-a-proxy).
 
 Enable `dns` and `dashboard`:
 
