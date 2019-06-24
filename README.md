@@ -12,18 +12,24 @@ Argus is the assignment of **Software Innovation and R&D Management**.
 * 姚朋[@pengy14](https://github.com/pengy14)
 * 林许亚伦[@linxuyalun](https://github.com/linxuyalun)
 
-## Idea
+## Hypothesis
 
-Our idea is to build a platform which provides the main function. It can trigger an event via email to inform the user of the discount of commodity that they want. The basic procedure is as followed:
-* register
-* search commodities in taobao or jingdong with key words
+Our hypothesis is to build a price comparison platform. It can trigger an event via email to inform the user of the discount of commodity that they want. Commodities could origin from various shopping sites, such as amazon and jingdong. The basic procedure is as followed:
+* login
+* search commodities in amazon or jingdong with key words
 * add commodities to listening list
 * start listening
 * send an email when get a discount
 
 ### Advantages
-* no need to login jingdong or taobao
+* no need to login amazon or jingdong 
 * integration of multiple electronic business platforms
+* track history prices
+* discount notification
+
+## Customer Validation
+Customer validation is carrired out through online questionnaires, which consists of two rounds. The first round is designed to validate the necessity of price comparison platform. The second round is designed to validate the specified functions of our system. The [Customer Validation Report](doc/customer_validation.md) presents the process and result in detail.
+
 
 ## Cloud Native
 
