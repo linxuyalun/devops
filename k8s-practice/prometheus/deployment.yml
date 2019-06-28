@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  labels:
+    name: prometheus
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      name: prometheus
+  template:
+    metadata:
+      labels:
+        name: prometheus
+    spec:
+      serviceAccountName: prometheus
+      serviceAccount: prometheus
+      containers:
+      - name: prometheus
+        image: prom/prometheus
+        command:
+          - "/bin/prometheus"
+        args:
+          - "--config.file=/etc/prometheus/prometheus.yml"
+        ports:
+          - name: prometheus-port
+            containerPort: 9090
+            protocol: TCP
+        volumeMounts:
+          - name: prometheus-config # Find the volumes' volume name
+            mountPath: "/etc/prometheus"
+      volumes:
+        - name: prometheus-config
+          configMap:
+            name: prometheus-config # Mount the 'prometheus-config' created bt ConfigMap into containers
