@@ -92,3 +92,16 @@ scrape_configs:
       - source_labels: [__meta_kubernetes_pod_name]
         action: replace
         target_label: kubernetes_pod_name
+
+  - job_name: kubernetes-apiservers
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    kubernetes_sd_configs:
+      - role: endpoints
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name,__meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: default;kubernetes;https
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
