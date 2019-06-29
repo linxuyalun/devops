@@ -1,0 +1,17 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: grafana
+  namespace: kube-system
+  labels:
+    kubernetes.io/name: Grafana
+    kubernetes.io/cluster-service: "true"
+    addonmanager.kubernetes.io/mode: Reconcile
+spec:
+  selector:
+    k8s-app: grafana
+  type: ClusterIP
+  ports:
+  - name: grafana-port
+    port: 80
+    targetPort: 3000
