@@ -4,6 +4,8 @@ kind: Kustomization
 resources:
   - node-exporter/daemonset.yml
   - node-exporter/service.yml
+  - blackbox-exporter/deployment.yml
+  - blackbox-exporter/service.yml
   - rbac/clusterRole.yml
   - rbac/serviceAccount.yml
   - rbac/clusterRoleBinding.yml
