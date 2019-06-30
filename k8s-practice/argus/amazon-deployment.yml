@@ -1,0 +1,24 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: argus-amazon
+  namespace: default
+  labels:
+    name: argus-amazon
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      name: argus-amazon
+  template:
+    metadata:
+      labels:
+        name: argus-amazon
+    spec:
+      containers:
+        - name: argus-amazon
+          image: sjtuivan/argus:amazon
+          imagePullPolicy: Always
+          ports:
+            - name: argus-amazon
+              containerPort: 8088

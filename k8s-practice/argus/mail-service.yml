@@ -1,0 +1,16 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: argus-mail
+  namespace: default
+  labels:
+    name: argus-mail
+spec:
+  selector:
+    name: argus-mail
+  type: NodePort
+  ports:
+  - name: argus-mail
+    port: 8087
+    targetPort: 8087
+    nodePort: 30356

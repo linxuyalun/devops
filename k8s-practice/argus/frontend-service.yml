@@ -1,0 +1,16 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: argus-frontend
+  namespace: default
+  labels:
+    name: argus-frontend
+spec:
+  selector:
+    name: argus-frontend
+  type: NodePort
+  ports:
+  - name: argus-frontend
+    port: 3000
+    targetPort: 3000
+    nodePort: 30355

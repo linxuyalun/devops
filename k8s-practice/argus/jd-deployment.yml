@@ -1,0 +1,24 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: argus-jd
+  namespace: default
+  labels:
+    name: argus-jd
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      name: argus-jd
+  template:
+    metadata:
+      labels:
+        name: argus-jd
+    spec:
+      containers:
+        - name: argus-jd
+          image: sjtuivan/argus:jd
+          imagePullPolicy: Always
+          ports:
+            - name: argus-jd
+              containerPort: 8089

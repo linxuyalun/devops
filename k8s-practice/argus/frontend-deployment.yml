@@ -1,0 +1,24 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: argus-frontend
+  namespace: default
+  labels:
+    name: argus-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: argus-frontend
+  template:
+    metadata:
+      labels:
+        name: argus-frontend
+    spec:
+      containers:
+        - name: argus-frontend
+          image: sjtuivan/argus:frontend-nodeport
+          imagePullPolicy: Always
+          ports:
+            - name: argus-frontend
+              containerPort: 3000

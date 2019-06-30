@@ -1,0 +1,16 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: argus-jd
+  namespace: default
+  labels:
+    name: argus-jd
+spec:
+  selector:
+    name: argus-jd
+  type: NodePort
+  ports:
+  - name: argus-jd
+    port: 8089
+    targetPort: 8089
+    nodePort: 30358

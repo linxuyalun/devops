@@ -1,0 +1,24 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: argus-mail
+  namespace: default
+  labels:
+    name: argus-mail
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      name: argus-mail
+  template:
+    metadata:
+      labels:
+        name: argus-mail
+    spec:
+      containers:
+        - name: argus-mail
+          image: sjtuivan/argus:mail
+          imagePullPolicy: Always
+          ports:
+            - name: argus-mail
+              containerPort: 8087
