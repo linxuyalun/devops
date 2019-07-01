@@ -10,7 +10,7 @@ steps:
     username: root
     port: 30350
     secrets:
-      - from_secret: alicoud_rsa_pub
+      - from_secret: alicoud_rsa_private
     script:
       - cd /drone/src
       - ls
