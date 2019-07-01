@@ -9,6 +9,8 @@ steps:
     host: 202.120.40.8
     username: root
     port: 30350
+    secrets:
+      - from_secret: alicoud_rsa_pub
     script:
       - cd /drone/src
       - ls
