@@ -1,14 +1,17 @@
-kind: pipeline
-name: demo
+kind: pipline
+name: k8s-practice
 
 steps:
-- name: node1
-  image: node:11.12.0
-  commands:
-  - echo "this is testing"
-
-- name: node2
-  image: node:11.12.0
-  commands:
-  - sleep 10
-  - echo "sleep 10"
+# ssh pipelines deploy the application on my k8s cluster
+- name: ssh
+  image: appleboy/drone-ssh
+  settings:
+    host: 202.120.40.8
+    username: root
+    port: 30350
+    script:
+      - cd /drone/src
+      - ls
+  when:
+    branch:
+    - master
