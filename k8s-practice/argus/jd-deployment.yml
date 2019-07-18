@@ -6,7 +6,7 @@ metadata:
   labels:
     name: argus-jd
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       name: argus-jd
