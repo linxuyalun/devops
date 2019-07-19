@@ -41,5 +41,5 @@ This [doc](doc/cloud-native.md) gives you a really simple guide to devops by usi
 
 * [Continous Integration & Delivery](doc/cloud-native.md#continous-integration-&-delivery)
 * [Scheduling & Orchestration Overview](doc/cloud-native.md#scheduling-&-orchestration-overview)
-* [Kubernetes in Practice](doc/cloud-native.md#kubernetes-in-pratice)
+* [Kubernetes in Practice](doc/cloud-native.md#kubernetes-in-practice)
 
