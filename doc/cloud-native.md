@@ -472,7 +472,7 @@ volumes:
 
 This is also an options of CI/CD, but it's really hard to say which one is better. For me, I prefer the former, which looks more general.
 
-# Scheduling & Orchestration
+# Scheduling & Orchestration Overview
 
 As the only graduated scheduling and orchestration project in CNCF, k8s is no wonder the first choice. Learn basic knowledge of Kubernetes [here](https://kubernetes.io/docs/tutorials/).
 
@@ -616,6 +616,8 @@ InfluxDB is running at https://127.0.0.1:16443/api/v1/namespaces/kube-system/ser
 1. If you deploy microk8s on a remote machine, username and password are required when visit the machine. Right now this username/password are random strings created at MicroK8s install time. You should be able to add more uses in `/var/snap/microk8s/current/credentials/basic_auth.csv`. You can read more [here](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#static-password-file).
 2. If your pod's status is not "RUNNING", for example, but "ImagePullBackOff". You can run `microk8s.kubectl describe pod <pod-id>` to find out what's happening. More information about [how to debug “ImagePullBackOff”?](https://stackoverflow.com/questions/34848422/how-to-debug-imagepullbackoff)
 
+Now you can dive into it and do some experiments! ✌️
+
 ## Kubernetes demo
 
 You can learn about `kubectl` document which was just rewritten in k8s 1.14 [here](https://kubectl.docs.kubernetes.io/).
@@ -626,7 +628,7 @@ All files in the following demos can be found [here](../k8s-demo).
 
 **Aim**: Learn about how to mount secret file into containers.
 
-`customization.yaml`
+`kustomization.yaml`
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -1152,4 +1154,617 @@ Note that `/root/data` on your local machine and `/test-pd` in your containers s
 	hello
 	goodbye
 ```
+
+# Kubernetes in Practice
+
+Kubernetes is not only kubernetes. Its success main comes from its perfect ecosystem. The following contents will give you a graphic description of kubernetes ecosystem.
+
+## Cluster Overview
+
+Here's my environment:
+
+![](img/6.png)
+
+The cluster managed by [OpenStack](https://www.openstack.org/) has four Vms. The master `km` is bounded by a public ip,  and other three `ks`s are only have private ip. I can connect to `km` by ssh key from my local PC, and `km` can also connect to three `ks`s by ssh key.
+
+To deploy kubernetes, docker is required. I recommand you to try my [configure script](https://github.com/linxuyalun/oh-my-os) after you creating a new VM. It helps you install some essential tools, including vim, Docker, python3 (which you will need later) and zsh (just comment it if you are not a zsh follower)
+
+## Deploy kubernetes in a cluster
+
+We will use kubespray, a tool to deploy a production ready k8s cluster, to deploy k8s in my cluster.
+
+Kubespray uses [ansible](https://github.com/ansible/ansible) to help users deploy k8s quickly. The main idea of Kubespary is that it writes the pipeline of deploying kubernetes in ansible playbooks, and configure the cluster recorded in `inventory.ini` customized by users. Learn more about kubespray [here](https://kubespray.io/#/).
+
+If your cluster is not in China, just follow the guide in kubespray. Otherwise, you can continue to read my document. It's not easy to deploy k8s in China because of the GFW.
+
+### Download offline files
+
+You can follow this [article](https://veiasai.github.io/2019/04/17/kubespray-%E8%B6%85%E5%BF%AB%E4%B9%90%E7%9A%84offline%E5%AE%89%E8%A3%85k8s/) to learn how to download essential files under the GFW. Anyway, proxy is needed.   The main idea of this ariticle is that he configured only one VM in `inventory.ini`，so the only thing he needed to do is making sure the proxy works in this VM.
+
+Fortunately, all these offline files have been pre-downloaded.
+
+```bash
+> curl 10.0.0.26/list
+
+.
+├── inventory.ini
+├── kube-1.13.5
+│   ├── kube-1.13.5.tar
+│   ├── kubespray-v2.9.0.tar.gz
+│   └── releases
+│       ├── cni-plugins-amd64-v0.6.0.tgz
+│       ├── hyperkube
+│       └── kubeadm
+├── kube-1.14.1
+│   ├── kube-1.14.1.tar
+│   ├── kubespray-2.10.0.tar.gz
+│   └── releases
+│       ├── calicoctl
+│       ├── cni-plugins-amd64-v0.6.0.tgz
+│       ├── hyperkube
+│       └── kubeadm
+├── kube-install.sh
+└── list
+```
+
+I will use kubespray 2.10.0 to deploy kubernetes 1.14.1, download the above files to my `km` root home:
+
+```bash
+pwd # /root
+wget -r 10.0.0.26/kube-1.14.1
+```
+
+Extract kubespray and create own inventory:
+
+```bash
+cd kube-1.14.1
+tar xzf kubespray-2.10.0.tar.gz .
+cd kubespary-2.10.0
+cp -r inventory/sample inventory/mycluster
+```
+
+In order to have a pure environment, use `pipenv` to create a virtual environment:
+
+```bash
+pwd # /root/kube-1.14.1/kubespray-2.10.0
+pipenv --three shell
+pipenv install -r requirement.txt
+```
+
+### Edit `ini` in your inventory
+
+Configure `kube-1.14.1/kubespray-2.10.0/inventory/mycluster/inventory.ini`
+
+```ini
+[all]
+km ansible_host=10.0.0.7 ansible_ssh_user=root
+ks1 ansible_host=10.0.0.100 ansible_ssh_user=root
+ks2 ansible_host=10.0.0.102 ansible_ssh_user=root
+ks3 ansible_host=10.0.0.97 ansible_ssh_user=root
+
+[kube-master]
+km
+
+[etcd]
+ks1
+ks2
+ks3
+
+[kube-node]
+km
+ks1
+ks2
+ks3
+
+[k8s-cluster:children]
+kube-master
+kube-node
+```
+
+Points of this file:
+
+- Each section uses the node name defined by `[all]`
+
+- `[kube-master]`: your kubernetes master
+- `[etcd]`: Your etcd node, should be odd. When I configured my cluster, I set `[etcd]` as single km at first. However, this resulted in faild to access etcd server. And when I set the `[etcd]` number as three nodes, the issue fixed. I haven't figured out the reson yet.
+- `[kube-node]`: All kubernetes node
+
+### Edit script `build.sh`
+
+Cause we have already downloaded related files, downloading steps in ansible script can be commented.
+
+`~/kube-1.14.1/kubespray-2.10.0/cluster.yml`
+
+```yaml
+# ...
+- hosts: k8s-cluster:etcd:calico-rr
+any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+roles:
+    - { role: kubespray-defaults}
+    - { role: kubernetes/preinstall, tags: preinstall }
+    # - { role: "container-engine", tags: "container-engine", when: deploy_container_engine|default(true) }
+    # - { role: download, tags: download, when: "not skip_downloads" }
+environment: "{{proxy_env}}"
+# ...
+```
+
+And then, we need to load images into each node's Docker, and we need to place files into right place. We can do this automatically by a script. Before that, configre  `/etc/hosts`  to write my script more convenient.
+
+ `/etc/hosts`
+
+```
+127.0.0.1 localhost localhost.localdomain localhost4 localhost4.localdomain4 km
+::1 localhost6 localhost6.localdomain6 localhost6.localdomain
+10.0.0.97 ks3
+10.0.0.102 ks2
+10.0.0.100 ks1
+```
+
+Note that the function of this file is setting nickname of ip. In fact, kubespray will also update this file after installation acoording to `inventory.ini`.
+
+`~/build.sh`
+
+```bash
+# Config version
+version=1.14.1
+kubeDir=kube-${version}
+
+# Config hosts
+hosts=(km ks1 ks2 ks3)
+
+for host in ${hosts[@]}
+do
+  scp -r ${kubeDir}/releases ${host}:/tmp/
+  scp ${kubeDir}/kube-1.14.1.tar ${host}:~/
+
+  ssh ${host} "sudo cp /tmp/releases/kubeadm /usr/local/bin/kubeadm &&
+               sudo chmod +x /usr/local/bin/kubeadm"
+
+  ssh ${host} "sudo docker load -i kube-1.14.1.tar"
+done
+
+ansible-playbook -i ${kubeDir}/kubespray-2.10.0/inventory/mycluster/inventory.ini --become --become-user=root ${kubeDir}/kubespray-2.10.0/cluster.yml
+
+ssh ${host[0]} "mkdir ~/.kube/ &&
+                sudo cp /etc/kubernetes/admin.conf ~/.kube/config &&
+                sudo chmod 666 ~/.kube/config"
+```
+
+Details in this script
+
+- `km ks1 ks2 ks3` are set in `/etc/hosts`. If not set, use ip instead;
+- Make sure Docker is installed in each node, or `docker load -i kube-1.14.1.tar` can't be executed;
+- In my script, I move `kubeadm` to `/usr/local/bin/kubeadm`. The reason is in kubespray, operating of copying `kubeadm` to `/usr/local/bin/kubeadm`  is written in ansible playbook Download part, and we just commented this part before;
+- `kubeadm` has no exec right by default, add this right manually.
+
+Run the script then:
+
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+Deploy successfully:
+
+```
+> kubectl get nodes
+NAME   STATUS   ROLES    AGE     VERSION
+km     Ready    master   12m   v1.14.1
+ks1    Ready    <none>   11m   v1.14.1
+ks2    Ready    <none>   11m   v1.14.1
+ks3    Ready    <none>   11m   v1.14.1
+```
+
+## Deploy service
+
+The function of our service can be seen [here](https://github.com/linxuyalun/devops#hypothesis). In our case, we have a front-end service and three back-end services (mail service for notification, jd service for searching goods of jd and amazon service for searching goods of amazon). Here's our configuration:
+
+`kustomization.yml`:
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: default
+
+resources:
+  - frontend-deployment.yml
+  - frontend-service.yml
+  - jd-deployment.yml
+  - jd-service.yml
+  - amazon-deployment.yml
+  - amazon-service.yml
+  - mail-deployment.yml
+  - mail-service.yml
+```
+
+`frontend-deployment.yml`:
+
+```yaml
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: argus-frontend
+  namespace: default
+  labels:
+    name: argus-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: argus-frontend
+  template:
+    metadata:
+      labels:
+        name: argus-frontend
+    spec:
+      containers:
+        - name: argus-frontend
+          image: sjtuivan/argus:frontend-nodeport
+          imagePullPolicy: Always
+          ports:
+            - name: argus-frontend
+              containerPort: 3000
+```
+
+`frontend-service.yml`:
+
+```yaml
+kind: Service
+apiVersion: v1
+metadata:
+  name: argus-frontend
+  namespace: default
+  labels:
+    name: argus-frontend
+spec:
+  selector:
+    name: argus-frontend
+  type: NodePort
+  ports:
+  - name: argus-frontend
+    port: 3000
+    targetPort: 3000
+    nodePort: 30355
+```
+
+`jd-deployment.yml`:
+
+```yaml
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: argus-jd
+  namespace: default
+  labels:
+    name: argus-jd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: argus-jd
+  template:
+    metadata:
+      labels:
+        name: argus-jd
+    spec:
+      containers:
+        - name: argus-jd
+          image: sjtuivan/argus:jd
+          imagePullPolicy: Always
+          ports:
+            - name: argus-jd
+              containerPort: 8089
+```
+
+`jd-service.yaml`:
+
+```yaml
+kind: Service
+apiVersion: v1
+metadata:
+  name: argus-jd
+  namespace: default
+  labels:
+    name: argus-jd
+spec:
+  selector:
+    name: argus-jd
+  type: NodePort
+  ports:
+  - name: argus-jd
+    port: 8089
+    targetPort: 8089
+    nodePort: 30358
+```
+
+`amazon-deployment.yml`:
+
+```yaml
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: argus-amazon
+  namespace: default
+  labels:
+    name: argus-amazon
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      name: argus-amazon
+  template:
+    metadata:
+      labels:
+        name: argus-amazon
+    spec:
+      containers:
+        - name: argus-amazon
+          image: sjtuivan/argus:amazon
+          imagePullPolicy: Always
+          ports:
+            - name: argus-amazon
+              containerPort: 8088
+```
+
+`amazon-service.yml`:
+
+```yaml
+kind: Service
+apiVersion: v1
+metadata:
+  name: argus-amazon
+  namespace: default
+  labels:
+    name: argus-amazon
+spec:
+  selector:
+    name: argus-amazon
+  type: NodePort
+  ports:
+  - name: argus-amazon
+    port: 8088
+    targetPort: 8088
+    nodePort: 30357
+```
+
+`mail-deployment.yml`:
+
+```yaml
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: argus-mail
+  namespace: default
+  labels:
+    name: argus-mail
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      name: argus-mail
+  template:
+    metadata:
+      labels:
+        name: argus-mail
+    spec:
+      containers:
+        - name: argus-mail
+          image: sjtuivan/argus:mail
+          imagePullPolicy: Always
+          ports:
+            - name: argus-mail
+              containerPort: 8087
+```
+
+`mail-service.yaml`:
+
+```yaml
+kind: Service
+apiVersion: v1
+metadata:
+  name: argus-mail
+  namespace: default
+  labels:
+    name: argus-mail
+spec:
+  selector:
+    name: argus-mail
+  type: NodePort
+  ports:
+  - name: argus-mail
+    port: 8087
+    targetPort: 8087
+    nodePort: 30356
+```
+
+Run `kubectl apply -k . ` to start the server, here is the result:
+
+```bash
+> kubectl get svc
+NAME             TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+argus-amazon     NodePort    10.233.27.183   <none>        8088:30357/TCP   33h
+argus-frontend   NodePort    10.233.37.175   <none>        3000:30355/TCP   33h
+argus-jd         NodePort    10.233.29.85    <none>        8089:30358/TCP   33h
+argus-mail       NodePort    10.233.3.244    <none>        8087:30356/TCP   33h
+kubernetes       ClusterIP   10.233.0.1      <none>        443/TCP          2d7h
+
+> kubectl get deployment
+NAME             READY   UP-TO-DATE   AVAILABLE   AGE
+argus-amazon     3/3     3            3           33h
+argus-frontend   1/1     1            1           33h
+argus-jd         1/1     1            1           33h
+argus-mail       3/3     3            3           33h
+
+> kubectl get pods
+NAME                             READY   STATUS    RESTARTS   AGE
+argus-amazon-79f9f4f559-2z2k2    1/1     Running   1          33h
+argus-amazon-79f9f4f559-lqm4q    1/1     Running   1          33h
+argus-amazon-79f9f4f559-n5xl6    1/1     Running   1          33h
+argus-frontend-dc965867d-swjtl   1/1     Running   1          33h
+argus-jd-6d8d9fb6fb-pfdgs        1/1     Running   1          33h
+argus-mail-5b7759dd54-7jj8h      1/1     Running   1          33h
+argus-mail-5b7759dd54-snmst      1/1     Running   1          33h
+argus-mail-5b7759dd54-t6xv5      1/1     Running   1          33h
+```
+
+Everything runs as expectation.
+
+![](img/7.png)
+
+## Horizontal Pod Autoscaler
+
+The Horizontal Pod Autoscaler automatically scales the number of pods in a replication controller, deployment or replica set based on observed CPU utilization. Learn more about [HPA](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/).
+
+Since Kubernetes 1.8, CPU, memory and other resources information can be gotton bt Metrics API. User can get these information (e.g. `kubectl top` ) directly, HPA can use these information to autoscale
+
+You can have a look at this [article](https://blog.csdn.net/ygqygq2/article/details/82971338), which also tells you how to practice HPA in k8s.
+
+To use HPA, deploy a [Metrics Server](https://github.com/kubernetes-incubator/metrics-server) first. Run the following commands in your cluster.
+
+```bash
+git clone git@github.com:kubernetes-incubator/metrics-server.git
+cd metrics-server
+```
+
+Remember to set a proxy for your Docker or you can't download images successfully.
+
+Before deployment, you need to add two more params in your `metrics-server-deployment.yaml`:
+
+```diff
+containers:
+  - name: metrics-server
++   args:
++   - --kubelet-preferred-address-types=InternalIP,Hostname,InternalDNS,ExternalDNS,ExternalIP
++   - --kubelet-insecure-tls
+    image: k8s.gcr.io/metrics-server-amd64:v0.3.3
+```
+
+Deploy it:
+
+```
+kubectl create -f deploy/1.8+/
+```
+
+Run the following commands to see the metrics:
+
+```bash
+> kubectl top pods
+NAME                             CPU(cores)   MEMORY(bytes)
+argus-amazon-79f9f4f559-2z2k2    132m         193Mi
+argus-amazon-79f9f4f559-lqm4q    107m         179Mi
+argus-amazon-79f9f4f559-n5xl6    109m         186Mi
+argus-frontend-dc965867d-swjtl   1m           287Mi
+argus-jd-6d8d9fb6fb-pfdgs        7m           619Mi
+argus-mail-5b7759dd54-7jj8h      0m           32Mi
+argus-mail-5b7759dd54-snmst      0m           30Mi
+argus-mail-5b7759dd54-t6xv5      0m           29Mi
+```
+
+Now, let's configure HPA file and update `kustomization.yml`
+
+`kustomization.yml`
+
+```diff
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: default
+
+resources:
+  - frontend-deployment.yml
+  - frontend-service.yml
+  - jd-deployment.yml
++ - jd-hpa.yml
+  - jd-service.yml
+  - amazon-deployment.yml
+  - amazon-service.yml
+  - mail-deployment.yml
+  - mail-service.yml
+```
+
+`jd-hpa.yml`:
+
+```yaml
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: argus-jd
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: argus-jd
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 1
+```
+
+Run `kubectl apply -k .`  again, and see HPA status:
+
+```bash
+> kubectl get hpa
+NAME       REFERENCE             TARGETS        MINPODS   MAXPODS   REPLICAS   AGE
+argus-jd   Deployment/argus-jd   <unknown>/1%   1         10        1          34h
+```
+
+A known issue is `kubectl top` works but `hpa` doesn't work, as you can see, the current status is `<unknown>`. If we discover more, we can see:
+
+```
+> kubectl describe hpa
+Name:                                                  argus-jd
+Namespace:                                             default
+Labels:                                                <none>
+Annotations:                                           kubectl.kubernetes.io/last-applied-configuration:
+                                                         {"apiVersion":"autoscaling/v2beta2","kind":"HorizontalPodAutoscaler","metadata":{"annotations":{},"name":"argus-jd","namespace":"default"}...
+CreationTimestamp:                                     Thu, 18 Jul 2019 02:12:04 +0000
+Reference:                                             Deployment/argus-jd
+Metrics:                                               ( current / target )
+  resource cpu on pods  (as a percentage of request):  <unknown> / 1%
+Min replicas:                                          1
+Max replicas:                                          10
+Deployment pods:                                       1 current / 0 desired
+Conditions:
+  Type           Status  Reason                   Message
+  ----           ------  ------                   -------
+  AbleToScale    True    SucceededGetScale        the HPA controller was able to get the target's current scale
+  ScalingActive  False   FailedGetResourceMetric  the HPA was unable to compute the replica count: missing request for cpu
+Events:
+  Type     Reason                        Age                    From                       Message
+  ----     ------                        ----                   ----                       -------
+  Warning  FailedComputeMetricsReplicas  19m (x6613 over 28h)   horizontal-pod-autoscaler  failed to get cpu utilization: missing request for cpu
+  Warning  FailedGetResourceMetric       4m9s (x6672 over 28h)  horizontal-pod-autoscaler  missing request for cpu
+```
+
+Or we will find errors in log:
+
+```
+> kubectl logs -f metrics-server-fc4dbc94b-zcfqb -n kube-system
+I0718 08:38:47.931193       1 serving.go:312] Generated self-signed cert (apiserver.local.config/certificates/apiserver.crt, apiserver.local.config/certificates/apiserver.key)
+I0718 08:38:48.648716       1 secure_serving.go:116] Serving securely on [::]:443
+E0718 08:39:02.388164       1 reststorage.go:147] unable to fetch pod metrics for pod default/argus-jd-6d8d9fb6fb-g2dr9: no metrics known for pod
+E0718 08:39:02.388185       1 reststorage.go:147] unable to fetch pod metrics for pod default/argus-jd-6d8d9fb6fb-89xpv: no metrics known for pod
+E0718 08:39:02.388190       1 reststorage.go:147] unable to fetch pod metrics for pod default/argus-jd-6d8d9fb6fb-pfdgs: no metrics known for pod
+E0718 08:39:17.661518       1 reststorage.go:128] unable to fetch node metrics for node "km": no metrics known for node
+E0718 08:39:17.661549       1 reststorage.go:128] unable to fetch node metrics for node "ks1": no metrics known for node
+E0718 08:39:17.661558       1 reststorage.go:128] unable to fetch node metrics for node "ks2": no metrics known for node
+E0718 08:39:17.661566       1 reststorage.go:128] unable to fetch node metrics for node "ks3": no metrics known for node
+E0718 08:39:17.723265       1 reststorage.go:147] unable to fetch pod metrics for pod default/argus-jd-6d8d9fb6fb-pfdgs: no metrics known for pod
+E0718 08:39:17.723297       1 reststorage.go:147] unable to fetch pod metrics for pod default/argus-jd-6d8d9fb6fb-89xpv: no metrics known for pod
+E0718 08:39:17.723306       1 reststorage.go:147] unable to fetch pod metrics for pod default/argus-jd-6d8d9fb6fb-g2dr9: no metrics known for pod
+E0718 08:39:32.735600       1 reststorage.go:147] unable to fetch pod metrics for pod default/argus-jd-6d8d9fb6fb-pfdgs: no metrics known for pod
+E0718 08:39:32.735674       1 reststorage.go:147] unable to fetch pod metrics for pod default/argus-jd-6d8d9fb6fb-g2dr9: no metrics known for pod
+E0718 08:39:32.735685       1 reststorage.go:147] unable to fetch pod metrics for pod default/argus-jd-6d8d9fb6fb-89xpv: no metrics known for pod
+E0718 08:39:48.054336       1 reststorage.go:147] unable to fetch pod metrics for pod default/argus-jd-6d8d9fb6fb-pfdgs: no metrics known for pod
+E0718 08:39:48.054363       1 reststorage.go:147] unable to fetch pod metrics for pod default/argus-jd-6d8d9fb6fb-g2dr9: no metrics known for pod
+E0718 08:39:48.054371       1 reststorage.go:147] unable to fetch pod metrics for pod default/argus-jd-6d8d9fb6fb-89xpv: no metrics known for pod
+```
+
+A lot of [issues](https://github.com/kubernetes-incubator/metrics-server/issues/207) about it can be seen on [GitHub](https://github.com/kubernetes-incubator/metrics-server/issues), however, the maintainers still don't give a general solution. 
 
