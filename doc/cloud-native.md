@@ -1157,7 +1157,7 @@ Note that `/root/data` on your local machine and `/test-pd` in your containers s
 
 # Kubernetes in Practice
 
-Kubernetes is not only kubernetes. Its success main comes from its perfect ecosystem. The following contents will give you a graphic description of kubernetes ecosystem.
+Kubernetes is not only kubernetes. Thanks to its ecosystem, it brings today's kubernetes glorious. The following contents will give you a graphic description of kubernetes ecosystem.
 
 ## Cluster Overview
 
@@ -1165,7 +1165,7 @@ Here's my environment:
 
 ![](img/6.png)
 
-The cluster managed by [OpenStack](https://www.openstack.org/) has four Vms. The master `km` is bounded by a public ip,  and other three `ks`s are only have private ip. I can connect to `km` by ssh key from my local PC, and `km` can also connect to three `ks`s by ssh key.
+The cluster managed by [OpenStack](https://www.openstack.org/) has four VMs. The master `km` is bounded by a public ip,  and other three `ks`s are only have private ip. I can connect to `km` by ssh key from my local PC, and `km` can also connect to three `ks`s by ssh key.
 
 To deploy kubernetes, docker is required. I recommand you to try my [configure script](https://github.com/linxuyalun/oh-my-os) after you creating a new VM. It helps you install some essential tools, including vim, Docker, python3 (which you will need later) and zsh (just comment it if you are not a zsh follower)
 
@@ -1767,4 +1767,42 @@ E0718 08:39:48.054371       1 reststorage.go:147] unable to fetch pod metrics fo
 ```
 
 A lot of [issues](https://github.com/kubernetes-incubator/metrics-server/issues/207) about it can be seen on [GitHub](https://github.com/kubernetes-incubator/metrics-server/issues), however, the maintainers still don't give a general solution. 
+
+## Helm
+
+[Helm](https://helm.sh/) helps you manage Kubernetes applications. It looks like yum, npm, pip or other package manager. The installation package is Helm is Chart, which contains all related files of deployment.
+
+Run the following script in `km` to install Helm, again, remember to set proxy of Docker:
+
+```bash
+curl https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash
+```
+
+After a while, you can see a pod running on `kube-system`:
+
+```
+tiller-deploy-7f656b499f-dlxsg                           1/1     Running   0          1h
+```
+
+Tiller is the server-end of Helm, it manages the releases installed by Helm. By default, it only deploy one tiller in `kube-system`, but if you want to install application by Helm in other namespaces, you need to launch one in the corresponding namespaces.
+
+To init helm, set proxy of terminal:
+
+```bash
+export http_proxy=$YOUR_PROXY
+export https_proxy=$YOUR_PROXY
+export no_proxy=127.0.0.1,localhost,$YOUR_CLUSTER_IP
+```
+
+And then:
+
+```bash
+helm init
+```
+
+Here's the architecture of Helm, one picture is worth a thousand word.
+
+![img](https://www.kubernetes.org.cn/img/2018/01/20180111160842.jpg)
+
+## Prometheus Operator
 
