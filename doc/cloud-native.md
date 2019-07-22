@@ -1612,6 +1612,8 @@ Everything runs as expectation.
 
 ![](img/7.png)
 
+You can get the entire configure file [here](https://github.com/linxuyalun/devops/tree/master/k8s-practice/argus).
+
 ## Horizontal Pod Autoscaler
 
 The Horizontal Pod Autoscaler automatically scales the number of pods in a replication controller, deployment or replica set based on observed CPU utilization. Learn more about [HPA](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/).
@@ -1800,9 +1802,163 @@ And then:
 helm init
 ```
 
+**Note that you need to launch a TILLER server in the spefic namespace if using Helm to install applications.**
+
 Here's the architecture of Helm, one picture is worth a thousand word.
 
 ![img](https://www.kubernetes.org.cn/img/2018/01/20180111160842.jpg)
 
 ## Prometheus Operator
+
+[Peometheus](https://github.com/prometheus/prometheus) is a great tool to monitor your system, power your metrics and alerting. Prometheus is a cloud native project, whereas you need to configure a lot to deploy your Prometheus in cluster. I have put all the required files about deploying Prometheus [here](https://github.com/linxuyalun/devops/tree/master/k8s-practice/prometheus), so the only thing you need to do is `kubectl apply -k .`. And there is a UI tool called [Grafana](https://github.com/grafana/grafana) for beautiful analytics of time series data, I also put related files [here](https://github.com/linxuyalun/devops/tree/master/k8s-practice/grafana).
+
+I won't talk too much about Prometheus, I'd like to introduce [Prometheus Operator](https://github.com/coreos/prometheus-operator), which creates/configures/manages Prometheus clusters atop Kubernetes. Prometheus Operator is more suitable for kubernetes, it is easy-configured and also powerful. You can also read this [article](https://www.sunmite.com/docker/use-prometheus-operator-monitor-kubernetes.html) to learn about how to deploy Prometheus Operator. It's a good article, which also provides some troubleshooting when deployment.
+
+Thanks to Helm, it's pretty easy to install Prometheus Operator:
+
+```bash
+helm install --name prometheus-operator --namespace=kube-system stable/prometheus-operator
+```
+
+You may get a `forbidden: User "system:serviceaccount:kube-system:default" cannot get namespaces in the namespace "default ` error, you can see the same [issue and its solution](https://github.com/fnproject/fn-helm/issues/21) in GitHub. 
+
+See the Prometheus Operator in your cluster:
+
+```bash
+> kubectl get -n kube-system
+NAME                                                         READY   STATUS    RESTARTS   AGE
+pod/alertmanager-prometheus-operator-alertmanager-0          2/2     Running   0          4d5h
+pod/prometheus-operator-grafana-7d89b7c69f-648sr             2/2     Running   0          4d5h
+pod/prometheus-operator-kube-state-metrics-7c47f48df-bwmkd   1/1     Running   0          4d5h
+pod/prometheus-operator-operator-8cbc9775f-bgwtr             1/1     Running   0          4d5h
+pod/prometheus-operator-prometheus-node-exporter-6mbzc       1/1     Running   0          4d5h
+pod/prometheus-operator-prometheus-node-exporter-bh7nh       1/1     Running   0          4d5h
+pod/prometheus-operator-prometheus-node-exporter-gsgqd       1/1     Running   0          4d5h
+pod/prometheus-operator-prometheus-node-exporter-lsnhx       1/1     Running   0          4d5h
+pod/prometheus-prometheus-operator-prometheus-0              3/3     Running   1          4d5h
+# And other pods
+
+NAME                                                   TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                  AGE
+service/alertmanager-operated                          ClusterIP   None            <none>        9093/TCP,6783/TCP        4d5h
+service/prometheus-operator-alertmanager               NodePort    10.233.40.69    <none>        9093:30352/TCP           4d5h
+service/prometheus-operator-coredns                    ClusterIP   None            <none>        9153/TCP                 4d5h
+service/prometheus-operator-grafana                    NodePort    10.233.33.201   <none>        80:30351/TCP             4d5h
+service/prometheus-operator-kube-controller-manager    ClusterIP   None            <none>        10252/TCP                4d5h
+service/prometheus-operator-kube-etcd                  ClusterIP   None            <none>        2379/TCP                 4d5h
+service/prometheus-operator-kube-scheduler             ClusterIP   None            <none>        10251/TCP                4d5h
+service/prometheus-operator-kube-state-metrics         ClusterIP   10.233.56.150   <none>        8080/TCP                 4d5h
+service/prometheus-operator-kubelet                    ClusterIP   None            <none>        10250/TCP                4d5h
+service/prometheus-operator-operator                   ClusterIP   10.233.59.175   <none>        8080/TCP                 4d5h
+service/prometheus-operator-prometheus                 NodePort    10.233.1.35     <none>        9090:30353/TCP           4d5h
+service/prometheus-operator-prometheus-node-exporter   ClusterIP   10.233.56.241   <none>        9100/TCP                 4d5h
+# And other service
+
+NAME                                                          DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR                 AGE
+daemonset.apps/prometheus-operator-prometheus-node-exporter   4         4         4       4            4           <none>                        4d5h
+# And other daemonset
+
+NAME                                                     READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/prometheus-operator-grafana              1/1     1            1           4d5h
+deployment.apps/prometheus-operator-kube-state-metrics   1/1     1            1           4d5h
+deployment.apps/prometheus-operator-operator             1/1     1            1           4d5h
+# And other deployment
+
+
+NAME                                                               DESIRED   CURRENT   READY   AGE
+replicaset.apps/prometheus-operator-grafana-7d89b7c69f             1         1         1       4d5h
+replicaset.apps/prometheus-operator-kube-state-metrics-7c47f48df   1         1         1       4d5h
+replicaset.apps/prometheus-operator-operator-8cbc9775f             1         1         1       4d5h
+# And other replicaset
+
+NAME                                                             READY   AGE
+statefulset.apps/alertmanager-prometheus-operator-alertmanager   1/1     4d5h
+statefulset.apps/prometheus-prometheus-operator-prometheus       1/1     4d5h
+```
+
+See your Helm release:
+
+```bash
+> helm list
+NAME                    REVISION        UPDATED                         STATUS          CHART                           APP VERSION     NAMESPACE
+prometheus-operator     1               Thu Jul 18 07:28:57 2019        DEPLOYED        prometheus-operator-5.16.0      0.31.1          kube-system
+```
+
+Charts of Prometheus Operator will help us to install Prometheus, AlertManager and Grafana, whereas the service type of them is `ClusterIP` by default. In order to access these services, we need to change their service type.
+
+**Grafana**: `kubectl edit svc prometheus-operator-grafana -n kube-system`
+
+```diff
+# ...
+spec:
+  clusterIP: 10.233.33.201
+  externalTrafficPolicy: Cluster
+  ports:
+  - name: service
++   nodePort: 30351
+    port: 80
+    protocol: TCP
+    targetPort: 3000
+  selector:
+    app: grafana
+    release: prometheus-operator
+  sessionAffinity: None
+- type: ClusterIP
++ type: NodePort
+```
+
+**AlertManager**: `kubectl edit svc prometheus-operator-alertmanager -n kube-system`
+
+```diff
+# ...
+spec:
+  clusterIP: 10.233.33.201
+  externalTrafficPolicy: Cluster
+  ports:
+  - name: service
++   nodePort: 30352
+    port: 80
+    protocol: TCP
+    targetPort: 3000
+  selector:
+    app: grafana
+    release: prometheus-operator
+  sessionAffinity: None
+- type: ClusterIP
++ type: NodePort
+```
+
+**Prometheus**: `kubectl edit svc prometheus-operator-prometheus -n kube-system`
+
+```diff
+# ...
+spec:
+  clusterIP: 10.233.33.201
+  externalTrafficPolicy: Cluster
+  ports:
+  - name: service
++   nodePort: 30353
+    port: 80
+    protocol: TCP
+    targetPort: 3000
+  selector:
+    app: grafana
+    release: prometheus-operator
+  sessionAffinity: None
+- type: ClusterIP
++ type: NodePort
+```
+
+Now you can get your service:
+
+**Pormetheus**: http://your-ip:30353/targets
+
+![](img/8.png)
+
+**AlertManager**: http://your-ip:30352
+
+![](img/9.png)
+
+**Grafana**: http://your-ip:30351
+
+![](img/10.png)
 
