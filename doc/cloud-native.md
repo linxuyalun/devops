@@ -1269,6 +1269,16 @@ Points of this file:
 - `[etcd]`: Your etcd node, should be odd. When I configured my cluster, I set `[etcd]` as single km at first. However, this resulted in faild to access etcd server. And when I set the `[etcd]` number as three nodes, the issue fixed. I haven't figured out the reson yet.
 - `[kube-node]`: All kubernetes node
 
+### Verify the calico mtu
+
+> my path: `kube-x.xx.x/kubespray/inventory/mycluster/group_vars/k8s-cluster/k8s-net-calico.yml`
+
+Compute your MTU sizes based on your environment.
+
+For example, I use OpenStack VXLAN and Calico MTU with IP-in-IP, so here MTU is 1430.
+
+(If you use OpenStack VXLAN, you must modify this value, because OpenStack VXLAN will cut and drop the overlong package.)
+
 ### Edit script `build.sh`
 
 Cause we have already downloaded related files, downloading steps in ansible script can be commented.
