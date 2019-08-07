@@ -1835,7 +1835,7 @@ You may get a `forbidden: User "system:serviceaccount:kube-system:default" canno
 See the Prometheus Operator in your cluster:
 
 ```bash
-> kubectl get -n kube-system
+> kubectl get all -n kube-system
 NAME                                                         READY   STATUS    RESTARTS   AGE
 pod/alertmanager-prometheus-operator-alertmanager-0          2/2     Running   0          4d5h
 pod/prometheus-operator-grafana-7d89b7c69f-648sr             2/2     Running   0          4d5h
