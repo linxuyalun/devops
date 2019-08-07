@@ -1970,5 +1970,7 @@ Now you can get your service:
 
 **Grafana**: http://your-ip:30351
 
+> Default username/password: admin/prom-operator
+
 ![](img/10.png)
 
