@@ -43,7 +43,7 @@ These techniques enable loosely coupled systems that are resilient, manageable, 
 
 This [doc](doc/cloud-native.md) gives you a really simple guide to devops by using cloud-native toolkits in practice.The doc is composed of the following parts:
 
-* [Continous Integration & Delivery](doc/cloud-native.md#continous-integration-&-delivery)
-* [Scheduling & Orchestration Overview](doc/cloud-native.md#scheduling-&-orchestration-overview)
+* [Continous Integration & Delivery](doc/cloud-native.md#continous-integration--delivery)
+* [Scheduling & Orchestration Overview](doc/cloud-native.md#scheduling--orchestration-overview)
 * [Kubernetes in Practice](doc/cloud-native.md#kubernetes-in-practice)
 
