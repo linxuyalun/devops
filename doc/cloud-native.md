@@ -1976,7 +1976,234 @@ Now you can get your service:
 
 # Service Mesh
 
-> todo
+## What is a Service Mesh
+
+> *A Service Mesh is a dedicated infrastructure layer for handling service-to-service communication. It’s responsible for the reliable delivery of requests through the complex topology of services that comprise a modern, cloud native application. In practice, the Service Mesh is typically implemented as an array of lightweight network proxies that are deployed alongside application code, without the application needing to be aware.*   --- Willian Morgan
+
+Service Mesh is a cool concept in Cloud Native, it is just like a TCP protocol in microservice era. This [article](https://buoyant.io/2017/04/25/whats-a-service-mesh-and-why-do-i-need-one/) tells you what the service mesh is meticulously.
+
+## Istio Overview
+
+At a high level, Istio helps reduce the complexity of these deployments, and eases the strain on your development teams. It is a completely open source service mesh that layers transparently onto existing distributed applications. It is also a platform, including APIs that let it integrate into any logging platform, or telemetry or policy system. Istio’s diverse feature set lets you successfully, and efficiently, run a distributed microservice architecture, and provides a uniform way to secure, connect, and monitor microservices.
+
+See this [article](https://istio.io/docs/concepts/what-is-istio/) to learn about what an Istio is and how it works.
+
+Istio has already offered a delightfully detailed [documents](https://istio.io/docs/), and following the [Getting start docs](https://istio.io/docs/setup/kubernetes/getting-started/)  lets you try out Istio quickly and it’s the ideal starting point. The following contents is my notes during practice.
+
+## Istio Installation
+
+### Downloading the release
+
+Istio is installed in its own `istio-system` namespace and can manage services from all other namespaces.
+
+1. Go to the [Istio release](https://github.com/istio/istio/releases) page to download the installation file corresponding to your OS. On a macOS or Linux system, you can run the following command to download and extract the latest release automatically:
+
+   ```bash
+   curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.2.2 sh -
+   ```
+
+2. Move to the Istio package directory. For example, if the package is `istio-1.2.2`:
+
+   ```bash
+   cd istio-1.2.2
+   ```
+
+   The installation directory contains:
+
+   - Installation YAML files for Kubernetes in `install/kubernetes`
+   - Sample applications in `samples/`
+   - The `istioctl` client binary in the `bin/` directory. `istioctl` is used when manually injecting Envoy as a sidecar proxy.
+
+3. Copy the `istioctl` client to your environment, on a macOS or Linux system:
+
+   ```bash
+    cp bin/istioctl /usr/local/bin/istioctl    
+   ```
+
+### Customizable Install with Helm
+
+We have already installed [Helm](#helm) before, we'll now install Istio with Helm.
+
+Change directory to the root of the release and we will install with Helm via `helm template`.
+
+```bash
+> pwd
+/root/istio-1.2.2
+```
+
+1. Create a namespace for the `istio-system` components:
+
+   ```bash
+   kubectl create namespace istio-system
+   ```
+
+2. Install all the Istio [Custom Resource Definitions](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#customresourcedefinitions) (CRDs) using `kubectl apply`, and wait a few seconds for the CRDs to be committed in the Kubernetes API-server:
+
+   ```bash
+   helm template install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
+   ```
+
+3. Verify that all `23` Istio CRDs were committed to the Kubernetes api-server using the following command:
+
+   >  If cert-manager is enabled, then the CRD count will be `28` instead.
+
+   ```bash
+   > kubectl get crds | grep 'istio.io\|certmanager.k8s.io' | wc -l
+   23
+   ```
+
+4. Select a [configuration profile](https://istio.io/docs/setup/kubernetes/additional-setup/config-profiles/) and then render and apply Istio’s core components corresponding to your chosen profile. The **default** profile is recommended for production deployments:
+
+   ```bash
+   helm template install/kubernetes/helm/istio --name istio --namespace istio-system | kubectl apply -f -
+   ```
+
+   To learn about other configuration profiles, see [here](https://istio.io/docs/setup/kubernetes/install/helm/#option-1-install-with-helm-via-helm-template).
+
+   You can further customize the configuration by adding one or more `--set <key>=<value>`[Installation Options](https://istio.io/docs/reference/config/installation-options/) to the helm command. 
+
+### Verifying the installation
+
+1. Referring to components table in [configuration profiles](https://istio.io/docs/setup/kubernetes/additional-setup/config-profiles/), verify that the Kubernetes services corresponding to your selected profile have been deployed.
+
+   ```bash
+   kubectl get svc -n istio-system
+   ```
+
+2. Ensure the corresponding Kubernetes pods are deployed and have a `STATUS` of `Running`:
+
+   ```bash
+   kubectl get pods -n istio-system
+   ```
+
+## Istio Bookinfo Application
+
+This is an official [example](https://istio.io/docs/examples/bookinfo/#if-you-are-running-on-kubernetes) Istio offers, and you can just following it. Or, if you want to dive into more details, the following contents will list the main steps of the example and also provides explanation of some steps.
+
+### Application Structure
+
+This example deploys a sample application composed of four separate microservices used to demonstrate various Istio features. **The application displays information about a book, similar to a single catalog entry of an online book store. Displayed on the page is a description of the book, book details (ISBN, number of pages, and so on), and a few book reviews.**
+
+The Bookinfo application is broken into four separate microservices:
+
+- `productpage`. The `productpage` microservice calls the `details` and `reviews` microservices to populate the page.
+- `details`. The `details` microservice contains book information.
+- `reviews`. The `reviews` microservice contains book reviews. It also calls the `ratings` microservice.
+- `ratings`. The `ratings` microservice contains book ranking information that accompanies a book review.
+
+There are 3 versions of the `reviews` microservice:
+
+- Version v1 doesn’t call the `ratings` service.
+- Version v2 calls the `ratings` service, and displays each rating as 1 to 5 **black stars**.
+- Version v3 calls the `ratings` service, and displays each rating as 1 to 5 **red stars**.
+
+The end-to-end architecture of the application is shown below.
+
+![Bookinfo Application without Istio](https://istio.io/docs/examples/bookinfo/noistio.svg)
+
+### Deploying the application
+
+To run the sample with Istio requires no changes to the application itself. Instead, we simply need to configure and run the services in an Istio-enabled environment, **with Envoy sidecars injected along side each service**. The needed commands and configuration vary depending on the runtime environment although in all cases the resulting deployment will look like this:
+
+[![Bookinfo Application](https://istio.io/docs/examples/bookinfo/withistio.svg)](https://istio.io/docs/examples/bookinfo/withistio.svg)
+
+**All of the microservices will be packaged with an Envoy sidecar that intercepts incoming and outgoing calls for the services, providing the hooks needed to externally control, via the Istio control plane, routing, telemetry collection, and policy enforcement for the application as a whole.**
+
+To start the application, follow the instructions:
+
+1. Change directory to the root of the Istio installation.
+
+   ```bash
+   > pwd
+   /root/istio-1.2.2
+   ```
+
+2. The default Istio installation uses [automatic sidecar injection](https://istio.io/docs/setup/kubernetes/additional-setup/sidecar-injection/#automatic-sidecar-injection). **Like we said before, we need Sidecar to interceptes incoming and outgoing calls for the services.** Label the namespace that will host the application with `istio-injection=enabled`:
+
+   ```bash
+   kubectl label namespace default istio-injection=enabled
+   ```
+
+3. Deploy your application using the `kubectl` command:
+
+   ```bash
+   kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+   ```
+
+   The command launches all four services shown in the `bookinfo` application architecture diagram. All 3 versions of the reviews service, v1, v2, and v3, are started.
+
+4. Confirm all services and pods are correctly defined and running by `kubectl get svc` and `kubectl get pods`
+
+5. To confirm that the Bookinfo application is running, send a request to it by a `curl` command from some pod, for example from `ratings`:
+
+   ```bash
+   > kubectl exec -it $(kubectl get pod -l app=ratings -o jsonpath='{.items[0].metadata.name}') -c ratings -- curl productpage:9080/productpage | grep -o "<title>.*</title>"
+   
+   <title>Simple Bookstore App</title>
+   ```
+
+Now that the Bookinfo services are up and running, you need to make the application accessible from outside of your Kubernetes cluster, e.g., from a browser. **An [Istio Gateway](https://istio.io/docs/concepts/traffic-management/#gateways) is used for this purpose**.
+
+1. Define the ingress gateway for the application:
+
+   ```bash
+   kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
+   ```
+
+2. Confirm the gateway has been created:
+
+   ```bash
+   > kubectl get gateway
+   NAME               AGE
+   bookinfo-gateway   32s
+   ```
+
+3. Follow [these instructions](https://istio.io/docs/tasks/traffic-management/ingress/ingress-control/#determining-the-ingress-ip-and-ports) to set the `INGRESS_HOST` and `INGRESS_PORT` variables for accessing the gateway. Return here, when they are set.
+
+   > If you want to change the port of the existed gateway, you can edit by:
+   >
+   > ```bash
+   > kubectl edit svc istio-ingressgateway -n istio-system
+   > ```
+
+4. Set `GATEWAY_URL`:
+
+   ```
+   $ export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
+   ```
+
+To confirm that the Bookinfo application is accessible from outside the cluster, run the following `curl` command:
+
+```
+> curl -s "http://${GATEWAY_URL}/productpage" | grep -o "<title>.*</title>"
+<title>Simple Bookstore App</title>
+```
+
+You can also point your browser to `http://$GATEWAY_URL/productpage` to view the Bookinfo web page. If you refresh the page several times, you should see different versions of reviews shown in `productpage`, presented in a round robin style (red stars, black stars, no stars), since we haven’t yet used Istio to control the version routing.
+
+Before you can use Istio to control the Bookinfo version routing, you need to define the available versions, called *subsets*, in [destination rules](https://istio.io/docs/concepts/traffic-management/#destination-rules).
+
+Run the following command to create default destination rules for the Bookinfo services:
+
+- If you did **not** enable mutual TLS, execute this command:
+
+  ```bash
+  kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+  ```
+
+- If you **did** enable mutual TLS, execute this command:
+
+  ```bash
+  kubectl apply -f samples/bookinfo/networking/destination-rule-all-mtls.yaml
+  ```
+
+Wait a few seconds for the destination rules to propagate.
+
+You can display the destination rules with the following command:
+
+```bash
+kubectl get destinationrules -o yaml
+```
 
 # Gitops
 
