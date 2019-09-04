@@ -1974,7 +1974,7 @@ Now you can get your service:
 
 ![](img/10.png)
 
-# Service Mesh
+# Service Mesh Overview
 
 ## What is a Service Mesh
 
@@ -1982,7 +1982,7 @@ Now you can get your service:
 
 Service Mesh is a cool concept in Cloud Native, it is just like a TCP protocol in microservice era. This [article](https://buoyant.io/2017/04/25/whats-a-service-mesh-and-why-do-i-need-one/) tells you what the service mesh is meticulously.
 
-## Istio Overview
+## What is an Istio
 
 At a high level, Istio helps reduce the complexity of these deployments, and eases the strain on your development teams. It is a completely open source service mesh that layers transparently onto existing distributed applications. It is also a platform, including APIs that let it integrate into any logging platform, or telemetry or policy system. Istio’s diverse feature set lets you successfully, and efficiently, run a distributed microservice architecture, and provides a uniform way to secure, connect, and monitor microservices.
 
@@ -1990,7 +1990,9 @@ See this [article](https://istio.io/docs/concepts/what-is-istio/) to learn about
 
 Istio has already offered a delightfully detailed [documents](https://istio.io/docs/), and following the [Getting start docs](https://istio.io/docs/setup/kubernetes/getting-started/)  lets you try out Istio quickly and it’s the ideal starting point. The following contents is my notes during practice.
 
-## Istio Installation
+# Istio in Practice
+
+## Installation
 
 ### Downloading the release
 
@@ -2076,7 +2078,7 @@ Change directory to the root of the release and we will install with Helm via `h
    kubectl get pods -n istio-system
    ```
 
-## Istio Bookinfo Application
+## Bookinfo Application Example
 
 This is an official [example](https://istio.io/docs/examples/bookinfo/#if-you-are-running-on-kubernetes) Istio offers, and you can just following it. Or, if you want to dive into more details, the following contents will list the main steps of the example and also provides explanation of some steps.
 
@@ -2204,6 +2206,77 @@ You can display the destination rules with the following command:
 ```bash
 kubectl get destinationrules -o yaml
 ```
+
+## Trafic Management
+
+Istio’s [traffic management](https://istio.io/docs/concepts/traffic-management/) model relies on the following two components:
+
+- Pilot , the core traffic management component. The Istio component that programs the Envoy proxies, responsible for **service discovery, load balancing, and routing**.
+- Envoy proxies, which enforce configurations and policies set through Pilot. **The high-performance proxy that Istio uses to mediate inbound and outbound traffic for all services in the service mesh.**
+
+These components enable the following Istio traffic management features:
+
+- Service discovery
+- Load balancing
+- Traffic routing and control
+
+### Pilot
+
+The following diagram shows the Pilot architecture:
+
+[![Pilot architecture](https://istio.io/docs/concepts/traffic-management/pilot-arch.svg)](https://istio.io/docs/concepts/traffic-management/pilot-arch.svg)
+
+As the diagram illustrates, Pilot maintains an **abstract model** of all the services in the mesh. **Platform-specific adapters** in Pilot translate the abstract model appropriately for your platform. For example, the Kubernetes adapter implements controllers to watch the Kubernetes API server for changes to pod registration information and service resources. The Kubernetes adapter translates this data for the abstract model.
+
+Pilot uses the abstract model to generate appropriate Envoy-specific configurations to let Envoy proxies know about one another in the mesh through the **Envoy API.**
+
+You can use Istio’s **Traffic Management API** to instruct Pilot to refine the Envoy configuration to exercise more granular control over the traffic in your service mesh.
+
+### Envoy proxies
+
+Traffic in Istio is categorized as data plane traffic and control plane traffic. Data plane traffic refers to the data that the business logic of the workloads manipulate. Control plane traffic refers to configuration and control data sent between Istio components to program the behavior of the mesh. 
+
+Envoy proxies are the **only** Istio components that interact with data plane traffic. Envoy proxies route the data plane traffic across the mesh and enforce the configurations and traffic rules without the services having to be aware of them. **Envoy proxies mediate all inbound and outbound traffic for all services in the mesh.** Envoy proxies are deployed as **sidecars** to services, logically augmenting the services with traffic management features:
+
+- [service discovery and load balancing](https://istio.io/docs/concepts/traffic-management/#discovery)
+- [traffic routing and configuration](https://istio.io/docs/concepts/traffic-management/#traffic-routing-and-configuration)
+- [network resilience and testing](https://istio.io/docs/concepts/traffic-management/#network-resilience-and-testing)
+
+Some of the features and tasks enabled by Envoy proxies include:
+
+- Traffic control features: enforce fine-grained traffic control with rich routing rules for HTTP, gRPC, WebSocket, and TCP traffic.
+- Network resiliency features: setup retries, failovers, circuit breakers, and fault injection.
+- Security and authentication features: enforce security policies and enforce access control and rate limiting defined through the configuration API.
+
+### Request Routing
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Gitops
 
