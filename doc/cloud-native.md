@@ -2250,29 +2250,370 @@ Some of the features and tasks enabled by Envoy proxies include:
 
 ### Request Routing
 
+The following example shows a virtual service that specifies two HTTP traffic routing rules. The first rule includes a `match` condition with a regular expression to check if the username “jason” is in the request’s cookie. If the request matches this condition, the rule sends traffic to the `v2` subset of the `my-svc` service. Otherwise, the second rule sends traffic to the `v1` subset of the `my-svc` service.
 
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: my-vtl-svc
+spec:
+  hosts:
+  - "*"
+  http:
+  - match:
+    - headers:
+        cookie:
+          regex: "^(.*?;)?(user=jason)(;.*)?$"
+    route:
+    - destination:
+        host: my-svc
+        subset: v2
+  - route:
+    - destination:
+        host: my-svc
+        subset: v1
+```
 
+In the preceding example, there are two routing rules in the `http` section, indicated by a leading `-` in front of the first field of each rule.
 
+The first routing rule begins with the `match` field:
 
+- `match` Lists the routing rule’s matching conditions.
+- `headers` Specifies to look for a match in the header of the request.
+- `cookie` Specifies to look for a match in the header’s cookie.
+- `regex` Specifies the regular expression used to determine a match.
+- `route` Specifies where to route the traffic matching the condition. In this case, that traffic is HTTP traffic with the username `jason` in the cookie of the request’s header.
+- `destination` Specifies the route destination for the traffic matching the rule conditions.
+- `host` Specifies the destination’s host, `my-svc`.
+- `subset` Specifies the destination’s subset for the traffic matching the conditions, `v2` in this case.
 
+The configuration of the second routing rule in the example begins with the `route` field with a leading `-`. This rule applies to all traffic that doesn’t match the conditions specified in the first routing rule.
 
+- `route` Specifies where to route all traffic except for HTTP traffic matching the condition of the previous rule.
+- `destination` Specifies the routing rule’s destination.
+- `host` Specifies the destination’s host, `my-svc`.
+- `subset` Specifies the destination’s subset, `v1` in this case.
 
+#### Apply a virtual service
 
+Now, go back to our example. We'll do some changes of our BookInfo Application.
 
+To route to one version only, you apply virtual services that set the default version for the microservices. In this case, the virtual services will route all traffic to `v1` of each microservice.
 
+See our configure file:
 
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: productpage
+spec:
+  hosts:
+  - productpage
+  http:
+  - route:
+    - destination:
+        host: productpage
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+  - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: details
+spec:
+  hosts:
+  - details
+  http:
+  - route:
+    - destination:
+        host: details
+        subset: v1
+---
+```
 
+Run the following command to apply the virtual services:
 
+```bash
+kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+```
 
+Because configuration propagation is eventually consistent, wait a few seconds for the virtual services to take effect.
 
+You have configured Istio to route to the `v1` version of the Bookinfo microservices, most importantly the `reviews` service version 1.
 
+Open the Bookinfo site in your browser. The URL is `http://$GATEWAY_URL/productpage`. Notice that the reviews part of the page displays with no rating stars, no matter how many times you refresh. This is because you configured Istio to route all traffic for the reviews service to the version `reviews:v1` and this version of the service does not access the star ratings service.
 
+#### Route based on user identity
 
+Next, you will change the route configuration so that all traffic from a specific user is routed to a specific service version. In this case, all traffic from a user named Jason will be routed to the service `reviews:v2`.
 
+Note that Istio doesn’t have any special, built-in understanding of user identity. This example is enabled by the fact that the `productpage` service adds a custom `end-user` header to all outbound HTTP requests to the reviews service.
 
+Remember, `reviews:v2` is the version that **includes the star ratings feature**.
 
+See the new configuration file:
 
+```diff
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
++ - match:
++   - headers:
++       end-user:
++         exact: jason
++   route:
++   - destination:
++       host: reviews
++       subset: v2
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+```
 
+Run the following command to enable user-based routing:
+
+```bash
+kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+```
+
+On the `/productpage` of the Bookinfo app, log in as user `jason`. Refresh the browser. What do you see? The star ratings appear next to each review.
+
+Log in as another user (pick any name you wish). Refresh the browser. Now the stars are gone. This is because traffic is routed to `reviews:v1` for all users except Jason.
+
+### Fault Injection
+
+You can use fault injection to test the end-to-end failure recovery capability of the application as a whole. An incorrect configuration of the failure recovery policies could result in unavailability of critical services. Examples of incorrect configurations include incompatible or restrictive timeouts across service calls.
+
+With Istio, **you can use application-layer fault injection instead of killing pods, delaying packets, or corrupting packets at the TCP layer.** You can inject more relevant failures at the application layer, such as HTTP error codes, to test the resilience of an application.
+
+You can inject faults into requests that match specific conditions, and you can restrict the percentage of requests Istio subjects to faults.
+
+You can inject two types of faults:
+
+- **Delays:** Delays are timing failures. They mimic increased network latency or an overloaded upstream service.
+- **Aborts:** Aborts are crash failures. They mimic failures in upstream services. Aborts usually manifest in the form of HTTP error codes or TCP connection failures.
+
+#### Injecting an HTTP delay fault
+
+With the [Request Routing](#request-routing) task, our request flow is:
+
+- `productpage` → `reviews:v2` → `ratings` (only for user `jason`)
+- `productpage` → `reviews:v1` (for everyone else)
+
+To test the Bookinfo application microservices for resiliency, inject a 7s delay between the `reviews:v2` and `ratings` microservices for user `jason`. This test will uncover a bug that will be solved later.
+
+Note that the `reviews:v2` service has a 10s hard-coded connection timeout for calls to the `ratings` service. Even with the 7s delay that you introduced, you still expect the end-to-end flow to continue without any errors.
+
+Here is the configuration file:
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    fault:
+      delay:
+        percentage:
+          value: 100.0
+        fixedDelay: 7s
+    route:
+    - destination:
+        host: ratings
+        subset: v1
+```
+
+Create a fault injection rule to delay traffic coming from the test user `jason`.
+
+```bash
+kubectl apply -f samples/bookinfo/networking/virtual-service-ratings-test-delay.yaml
+```
+
+1. Open the [Bookinfo](https://istio.io/docs/examples/bookinfo) web application in your browser.
+
+2. On the `/productpage` web page, log in as user `jason`.
+
+   You expect the Bookinfo home page to load without errors in approximately 7 seconds. However, there is a problem: the Reviews section displays an error message:
+
+   ```plain
+   Error fetching product reviews!
+   Sorry, product reviews are currently unavailable for this book.
+   ```
+
+3. View the web page response times:
+
+   1. Open the *Developer Tools* menu in you web browser.
+   2. Open the Network tab
+   3. Reload the `/productpage` web page. You will see that the page actually loads in about 6 seconds.
+
+#### Testing the delay configuration
+
+1. Open the [Bookinfo](https://istio.io/docs/examples/bookinfo) web application in your browser.
+
+2. On the `/productpage` web page, log in as user `jason`.
+
+   You expect the Bookinfo home page to load without errors in approximately 7 seconds. However, there is a problem: the Reviews section displays an error message:
+
+   ```plain
+   Error fetching product reviews!
+   Sorry, product reviews are currently unavailable for this book.
+   ```
+
+3. View the web page response times:
+
+   1. Open the *Developer Tools* menu in you web browser.
+   2. Open the Network tab
+   3. Reload the `/productpage` web page. You will see that the page actually loads in about 6 seconds.
+
+#### Understanding what happened
+
+You’ve found a bug. There are hard-coded timeouts in the microservices that have caused the `reviews` service to fail.
+
+As expected, the 7s delay you introduced doesn’t affect the `reviews` service because the timeout between the `reviews` and `ratings` service **is hard-coded at 10s**. However, there is also a hard-coded timeout between the `productpage` and the `reviews` service, **coded as 3s + 1 retry for 6s total**. As a result, the `productpage` call to `reviews` times out prematurely and throws an error after 6s.
+
+Bugs like this can occur in typical enterprise applications where different teams develop different microservices independently. Istio’s fault injection rules help you identify such anomalies without impacting end users.
+
+#### Fixing the bug
+
+For this demo, you can just reduce the delay to the number which is less than 3s (e.g. 2s). And then there is no error. More general, you would normally fix the problem by:
+
+1. Either increasing the `productpage` to `reviews` service timeout or decreasing the `reviews` to `ratings` timeout
+2. Stopping and restarting the fixed microservice
+3. Confirming that the `/productpage` web page returns its response without any errors.
+
+#### Injecting an HTTP abort fault
+
+Another way to test microservice resiliency is to introduce an HTTP abort fault. In this task, you will introduce an HTTP abort to the `ratings` microservices for the test user `jason`.
+
+In this case, you expect the page to load immediately and display the `Ratings service is currently unavailable` message.
+
+Here is the configuration file:
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    fault:
+      abort:
+        percentage:
+          value: 100.0
+        httpStatus: 500
+    route:
+    - destination:
+        host: ratings
+        subset: v1
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+```
+
+Create a fault injection rule to send an HTTP abort for user `jason`:
+
+```bash
+kubectl apply -f samples/bookinfo/networking/virtual-service-ratings-test-abort.yaml
+```
+
+#### Testing the abort configuration
+
+1. Open the [Bookinfo](https://istio.io/docs/examples/bookinfo) web application in your browser.
+
+2. On the `/productpage`, log in as user `jason`.
+
+   If the rule propagated successfully to all pods, the page loads immediately and the `Ratings service is currently unavailable` message appears.
+
+### Traffic Shifting
+
+#### Apply weight-based routing
+
+To get started, run this command to route all traffic to the `v1` version of each microservice.
+
+```bash
+kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+```
+
+Open the Bookinfo site in your browser. The URL is `http://$GATEWAY_URL/productpage`, where `$GATEWAY_URL` is the External IP address of the ingress, as explained in the [Bookinfo](https://istio.io/docs/examples/bookinfo/#determining-the-ingress-ip-and-port) doc.
+
+Notice that the reviews part of the page displays with no rating stars, no matter how many times you refresh. This is because you configured Istio to route all traffic for the reviews service to the version `reviews:v1` and this version of the service does not access the star ratings service.
+
+Transfer 50% of the traffic from `reviews:v1` to `reviews:v3` with the following command:
+
+```bash
+kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
+```
+
+Here is the file:
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+      weight: 50
+    - destination:
+        host: reviews
+        subset: v3
+      weight: 50
+```
+
+Refresh the `/productpage` in your browser and you now see *red* colored star ratings approximately 50% of the time. This is because the `v3` version of `reviews` accesses the star ratings service, but the `v1` version does not.
 
 
 
