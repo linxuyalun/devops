@@ -2248,6 +2248,8 @@ Some of the features and tasks enabled by Envoy proxies include:
 - Network resiliency features: setup retries, failovers, circuit breakers, and fault injection.
 - Security and authentication features: enforce security policies and enforce access control and rate limiting defined through the configuration API.
 
+### Request Routing
+
 The following example shows a virtual service that specifies two HTTP traffic routing rules. The first rule includes a `match` condition with a regular expression to check if the username “jason” is in the request’s cookie. If the request matches this condition, the rule sends traffic to the `v2` subset of the `my-svc` service. Otherwise, the second rule sends traffic to the `v1` subset of the `my-svc` service.
 
 ```yaml
@@ -2293,18 +2295,27 @@ The configuration of the second routing rule in the example begins with the `rou
 - `host` Specifies the destination’s host, `my-svc`.
 - `subset` Specifies the destination’s subset, `v1` in this case.
 
-### Request Routing
-
 #### Apply a virtual service
 
-Now, go back to our [task](https://istio.io/docs/tasks/traffic-management/request-routing/). We'll do some changes of our BookInfo Application.
+Now, go back to our example. We'll do some changes of our BookInfo Application.
 
 To route to one version only, you apply virtual services that set the default version for the microservices. In this case, the virtual services will route all traffic to `v1` of each microservice.
 
 See our configure file:
 
 ```yaml
-# ...
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: productpage
+spec:
+  hosts:
+  - productpage
+  http:
+  - route:
+    - destination:
+        host: productpage
+        subset: v1
 ---
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
@@ -2319,7 +2330,32 @@ spec:
         host: reviews
         subset: v1
 ---
-# ...
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: details
+spec:
+  hosts:
+  - details
+  http:
+  - route:
+    - destination:
+        host: details
+        subset: v1
+---
 ```
 
 Run the following command to apply the virtual services:
@@ -2397,9 +2433,35 @@ With the [Request Routing](#request-routing) task, our request flow is:
 - `productpage` → `reviews:v2` → `ratings` (only for user `jason`)
 - `productpage` → `reviews:v1` (for everyone else)
 
-To test the Bookinfo application microservices for resiliency, this [task](https://istio.io/docs/tasks/traffic-management/fault-injection/) inject a 7s delay between the `reviews:v2` and `ratings` microservices for user `jason`. **This test will uncover a bug that will be solved later.**
+To test the Bookinfo application microservices for resiliency, inject a 7s delay between the `reviews:v2` and `ratings` microservices for user `jason`. This test will uncover a bug that will be solved later.
 
 Note that the `reviews:v2` service has a 10s hard-coded connection timeout for calls to the `ratings` service. Even with the 7s delay that you introduced, you still expect the end-to-end flow to continue without any errors.
+
+Here is the configuration file:
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    fault:
+      delay:
+        percentage:
+          value: 100.0
+        fixedDelay: 7s
+    route:
+    - destination:
+        host: ratings
+        subset: v1
+```
 
 Create a fault injection rule to delay traffic coming from the test user `jason`.
 
@@ -2465,6 +2527,36 @@ Another way to test microservice resiliency is to introduce an HTTP abort fault.
 
 In this case, you expect the page to load immediately and display the `Ratings service is currently unavailable` message.
 
+Here is the configuration file:
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    fault:
+      abort:
+        percentage:
+          value: 100.0
+        httpStatus: 500
+    route:
+    - destination:
+        host: ratings
+        subset: v1
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+```
+
 Create a fault injection rule to send an HTTP abort for user `jason`:
 
 ```bash
@@ -2481,13 +2573,55 @@ kubectl apply -f samples/bookinfo/networking/virtual-service-ratings-test-abort.
 
 ### Traffic Shifting
 
-This [task](https://istio.io/docs/tasks/traffic-management/traffic-shifting/) shows you how to gradually migrate traffic from one version of a microservice to another. For example, you might migrate traffic from an older version to a new version.
+To get started, run this command to route all traffic to the `v1` version of each microservice.
+
+```bash
+kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+```
+
+Open the Bookinfo site in your browser. The URL is `http://$GATEWAY_URL/productpage`, where `$GATEWAY_URL` is the External IP address of the ingress, as explained in the [Bookinfo](https://istio.io/docs/examples/bookinfo/#determining-the-ingress-ip-and-port) doc.
+
+Notice that the reviews part of the page displays with no rating stars, no matter how many times you refresh. This is because you configured Istio to route all traffic for the reviews service to the version `reviews:v1` and this version of the service does not access the star ratings service.
+
+Transfer 50% of the traffic from `reviews:v1` to `reviews:v3` with the following command:
+
+```bash
+kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
+```
+
+Here is the file:
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+      weight: 50
+    - destination:
+        host: reviews
+        subset: v3
+      weight: 50
+```
+
+Refresh the `/productpage` in your browser and you now see *red* colored star ratings approximately 50% of the time. This is because the `v3` version of `reviews` accesses the star ratings service, but the `v1` version does not.
 
 ### Circuit Breaking
 
 Circuit breaking is an important pattern for creating resilient microservice applications. Circuit breaking allows you to write applications that limit the impact of failures, latency spikes, and other undesirable effects of network peculiarities. 
 
-This [task](https://istio.io/docs/tasks/traffic-management/circuit-breaking/#configuring-the-circuit-breaker) will teach you how to configure circuit breaking rules with enough details and then test the configuration by intentionally “tripping” the circuit breaker.
+This task will teach you how to configure circuit breaking rules and then test the configuration by intentionally “tripping” the circuit breaker.
+
+### Mirroring
+
+### Ingress Gateway
 
 
 
