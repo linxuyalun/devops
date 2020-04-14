@@ -1,6 +1,5 @@
 # Argus
 
-[![Build Status](http://47.112.23.163:8081/api/badges/linxuyalun/devops/status.svg)](http://47.112.23.163:8081/linxuyalun/devops)
 [![LICENSE](https://img.shields.io/badge/license-NPL%20(The%20996%20Prohibited%20License)-blue.svg)](https://github.com/linxuyalun/devops/master/LICENSE)
 <a href="https://996.icu"><img src="https://img.shields.io/badge/link-996.icu-red.svg" alt="996.icu"></a>
 
@@ -32,7 +31,7 @@ Customer validation is carrired out through online questionnaires, which consist
 
 ### Demo
 
-We manage our project by submodule, and here are our [front-end code](https://github.com/pengy14/Argus-front) and [back-end code](https://github.com/JamesCao2048/Argus_Backend).
+We manage our project by submodule, and here are our source code of  [front-end](https://github.com/pengy14/Argus-front) and [back-end](https://github.com/JamesCao2048/Argus_Backend).
 
 
 ## Cloud Native
